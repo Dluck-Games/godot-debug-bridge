@@ -23,7 +23,7 @@ PATH="$(dirname "$godot_bin"):$PATH" GDBG_STATE="$state_dir" \
   "$godot_bin" --headless --path "$fixture_dir" -- --gdbg-smoke
 
 scene_output=$(PATH="$(dirname "$godot_bin"):$PATH" GDBG_STATE="$state_dir" \
-  "$cli_bin" --project-dir "$fixture_dir" test scene res://tests/scene_smoke.tscn 2>&1)
+  "$cli_bin" --project-dir "$fixture_dir" test scene res://tests/scene_smoke.tscn -- --gdbg-scene-smoke 2>&1)
 grep -F "GDBG_SCENE_TEST_OK" <<<"$scene_output"
 
 PATH="$(dirname "$godot_bin"):$PATH" GDBG_STATE="$state_dir" \
