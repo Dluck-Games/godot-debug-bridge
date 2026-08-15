@@ -25,7 +25,7 @@ jobs:
       - name: Validate public product boundary
         run: scripts/validate-public.sh
       - name: Build macOS, Windows, and Linux packages
-        run: scripts/package.sh 0.1.0-dev "${GITHUB_SHA::12}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        run: scripts/package.sh 0.1.1-dev "${GITHUB_SHA::12}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
       - name: Upload installable packages
         uses: actions/upload-artifact@v4
         with:

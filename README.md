@@ -12,8 +12,8 @@ two parts:
 - `gdbg` — the Go CLI: addon installation, project launch/stop, console and
   debug commands, asset reimport, and unit/integration/playtest execution.
 
-Version 0.1.0 is the initial public release. The protocol and extension APIs
-are usable but should still be treated as early-stage interfaces.
+Version 0.1.1 is the current patch release. The protocol and extension APIs are
+usable but should still be treated as early-stage interfaces.
 
 ## Install the CLI
 
@@ -30,7 +30,7 @@ irm https://raw.githubusercontent.com/Dluck-Games/godot-debug-bridge/main/script
 ```
 
 Both installers download the latest GitHub Release artifact, verify its SHA-256
-checksum, and install to `~/.local/bin` by default. Set `GDBG_VERSION=0.1.0` to
+checksum, and install to `~/.local/bin` by default. Set `GDBG_VERSION=0.1.1` to
 pin a version or `GDBG_INSTALL_DIR` to select another destination.
 
 To build the current source instead:
@@ -119,7 +119,7 @@ where local processes are trusted.
 
 ```sh
 scripts/validate-public.sh
-scripts/package.sh 0.1.0-dev
+scripts/package.sh 0.1.1-dev
 ```
 
 CI runs Go tests and vet, a clean Godot addon/console smoke test, public-content
