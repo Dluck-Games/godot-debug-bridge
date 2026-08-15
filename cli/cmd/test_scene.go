@@ -39,7 +39,7 @@ func init() {
 }
 
 func testSceneRun(cmd *cobra.Command, args []string) error {
-	sceneRes, userArgs, err := splitSceneArgs(args)
+	sceneRes, userArgs, err := splitSceneArgs(args, cmd.ArgsLenAtDash())
 	if err != nil {
 		return err
 	}
@@ -79,31 +79,25 @@ func runTestScene(godotBin, projectDir, sceneRes string, userArgs []string) erro
 }
 
 // splitSceneArgs separates the single scene path from the Godot user arguments
-// that follow '--'.
-func splitSceneArgs(args []string) (string, []string, error) {
+// that follow '--'. dashIndex is cmd.ArgsLenAtDash(): the number of arguments
+// before the '--' separator, or -1 when there is no separator.
+func splitSceneArgs(args []string, dashIndex int) (string, []string, error) {
 	if len(args) == 0 {
 		return "", nil, fmt.Errorf("scene path required; use e.g. 'gdbg test scene res://tests/smoke.tscn'")
 	}
-	dash := -1
-	for i, arg := range args {
-		if arg == "--" {
-			dash = i
-			break
+	if dashIndex == -1 {
+		if len(args) > 1 {
+			return "", nil, fmt.Errorf("unexpected extra arguments %v; pass Godot user arguments after '--'", args[1:])
 		}
-	}
-	if dash == 0 {
-		return "", nil, fmt.Errorf("scene path required before '--'")
-	}
-	if dash > 1 {
-		return "", nil, fmt.Errorf("unexpected extra arguments %v before '--'; provide a single scene path", args[1:dash])
-	}
-	if dash == -1 && len(args) > 1 {
-		return "", nil, fmt.Errorf("unexpected extra arguments %v; pass Godot user arguments after '--'", args[1:])
-	}
-	if dash == -1 {
 		return args[0], nil, nil
 	}
-	return args[0], args[dash+1:], nil
+	if dashIndex == 0 {
+		return "", nil, fmt.Errorf("scene path required before '--'")
+	}
+	if dashIndex != 1 {
+		return "", nil, fmt.Errorf("unexpected extra arguments %v before '--'; provide a single scene path", args[1:dashIndex])
+	}
+	return args[0], args[1:], nil
 }
 
 // validateSceneRes checks that a scene reference is a project-relative res://

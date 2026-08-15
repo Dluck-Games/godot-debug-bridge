@@ -113,21 +113,22 @@ func TestSplitSceneArgs(t *testing.T) {
 	cases := []struct {
 		name      string
 		args      []string
+		dashIndex int
 		wantScene string
 		wantUser  []string
 		wantErr   string
 	}{
-		{name: "scene only", args: []string{"res://tests/smoke.tscn"}, wantScene: "res://tests/smoke.tscn"},
-		{name: "user args after dash", args: []string{"res://tests/smoke.tscn", "--", "--json", "--duration=60"}, wantScene: "res://tests/smoke.tscn", wantUser: []string{"--json", "--duration=60"}},
-		{name: "bare dash", args: []string{"res://tests/smoke.tscn", "--"}, wantScene: "res://tests/smoke.tscn", wantUser: []string{}},
-		{name: "no scene", args: nil, wantErr: "scene path required"},
-		{name: "dash first", args: []string{"--", "--json"}, wantErr: "before '--'"},
-		{name: "extra positional", args: []string{"res://a.tscn", "res://b.tscn"}, wantErr: "unexpected extra arguments"},
-		{name: "extra before dash", args: []string{"res://a.tscn", "res://b.tscn", "--", "--json"}, wantErr: "before '--'"},
+		{name: "scene only", args: []string{"res://tests/smoke.tscn"}, dashIndex: -1, wantScene: "res://tests/smoke.tscn"},
+		{name: "user args after dash", args: []string{"res://tests/smoke.tscn", "--json", "--duration=60"}, dashIndex: 1, wantScene: "res://tests/smoke.tscn", wantUser: []string{"--json", "--duration=60"}},
+		{name: "empty user args after separator", args: []string{"res://tests/smoke.tscn"}, dashIndex: 1, wantScene: "res://tests/smoke.tscn", wantUser: []string{}},
+		{name: "no scene", args: nil, dashIndex: -1, wantErr: "scene path required"},
+		{name: "dash first", args: []string{"--json"}, dashIndex: 0, wantErr: "before '--'"},
+		{name: "extra positional", args: []string{"res://a.tscn", "res://b.tscn"}, dashIndex: -1, wantErr: "unexpected extra arguments"},
+		{name: "extra before dash", args: []string{"res://a.tscn", "res://b.tscn", "--json"}, dashIndex: 2, wantErr: "before '--'"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			scene, user, err := splitSceneArgs(tc.args)
+			scene, user, err := splitSceneArgs(tc.args, tc.dashIndex)
 			if tc.wantErr != "" {
 				if err == nil {
 					t.Fatalf("splitSceneArgs(%v) = nil error, want %q", tc.args, tc.wantErr)
