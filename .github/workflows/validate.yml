@@ -1,0 +1,41 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  structure:
+    name: Repository structure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify required files
+        shell: bash
+        run: |
+          required=(
+            .editorconfig
+            .gitattributes
+            .gitignore
+            LICENSE
+            README.md
+            addons/gdbg/LICENSE
+            addons/gdbg/README.md
+            addons/gdbg/plugin.cfg
+            addons/gdbg/plugin.gd
+            cli/README.md
+            protocol/README.md
+            docs/architecture.md
+            examples/minimal/.gitkeep
+          )
+
+          for path in "${required[@]}"; do
+            test -f "$path"
+          done
+
+          test -f addons/gdbg/plugin.cfg
