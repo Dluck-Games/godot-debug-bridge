@@ -1,0 +1,5 @@
+gdbg
+gdbg.exe
+*.test
+*.out
+coverage.txt
