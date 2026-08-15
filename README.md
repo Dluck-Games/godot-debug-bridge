@@ -92,6 +92,19 @@ actionable error when gdUnit4 is not installed. Integration and playtest tiers
 use the framework in `addons/gdbg/testing/`; the game supplies typed data and
 lifecycle behavior through a `DebugBridgeTestHostBase` adapter.
 
+Run any project-owned scene directly through Godot in headless mode:
+
+```sh
+gdbg --project-dir /path/to/game test scene res://tests/smoke.tscn
+gdbg --project-dir /path/to/game test scene res://bench/scenario.tscn -- --json --duration=60
+```
+
+`test scene` requires a project-relative `res://` path to a `.tscn` or `.scn`
+file inside the selected project. Godot is launched headless, its output is
+streamed to the terminal, and arguments after `--` are forwarded to the scene
+as Godot user arguments (read them in the scene with
+`OS.get_cmdline_user_args()`).
+
 ## State and protocol
 
 The CLI injects `GDBG_STATE` into launched games. Version 1 uses serialized file
