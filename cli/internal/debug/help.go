@@ -7,8 +7,8 @@ Usage:
   gdbg debug console <project-command> [args...] [flags]
 
 Bridge commands:
-  screenshot                       Capture the current viewport
-  record                           Record viewport frames to MP4 or MOV
+  screenshot                       Capture the current viewport (windowed game)
+  record                           Record viewport frames (windowed game)
   fetch <capture_id>               Retrieve an asynchronous screenshot result
   script <file.gd>                 Execute a GDScript file in the running game
   input actions                    List injectable input actions
@@ -21,6 +21,10 @@ All other commands are forwarded unchanged to the project's DebugBridgeHost.
 Games define their own command modules with the console framework in
 addons/gdbg/console/. Run 'gdbg debug help' to ask the running game for its
 available commands.
+
+Screenshot and recording require a rendered viewport. Start the game with
+'gdbg run game --windowed' before using those commands; console and input work
+with the default headless launch.
 
 Screenshot and recording flags:
   -d, --delay <seconds>            Wait before the first capture

@@ -24,3 +24,6 @@ Important commands:
 Project resolution uses `--project-dir`, then `GDBG_PROJECT_DIR`, then walks up
 from an interactive current directory. Runtime state uses `GDBG_STATE`,
 `XDG_STATE_HOME/gdbg`, or `~/.local/state/gdbg` in that order.
+
+The default game launch is headless. Console, script, input, and process control
+work in that mode; screenshot and recording require `gdbg run game --windowed`.
