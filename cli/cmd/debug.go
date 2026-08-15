@@ -2,6 +2,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"github.com/Dluck-Games/godot-debug-bridge/cli/internal/debug"
@@ -27,5 +29,10 @@ func init() {
 }
 
 func debugRun(cmd *cobra.Command, args []string) error {
-	return debug.Run(args, cmd.OutOrStdout(), cmd.ErrOrStderr())
+	normalized, err := consumeRawPersistentFlags(args)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return err
+	}
+	return debug.Run(normalized, cmd.OutOrStdout(), cmd.ErrOrStderr())
 }

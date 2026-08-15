@@ -16,6 +16,12 @@ var consoleCmd = &cobra.Command{
 	SilenceErrors:      true,
 	SilenceUsage:       true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		var err error
+		args, err = consumeRawPersistentFlags(args)
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+			return err
+		}
 		if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
 			fmt.Fprintln(cmd.OutOrStdout(), "Usage: gdbg console <command> [args...] [--screenshot ...]")
 			fmt.Fprintln(cmd.OutOrStdout(), "Commands are defined by the Godot project's DebugBridgeHost modules.")
