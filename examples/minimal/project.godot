@@ -1,0 +1,24 @@
+; Engine configuration file.
+; Minimal GDBG host example. Install addons/gdbg before running.
+
+config_version=5
+
+[application]
+
+config/name="GDBG Minimal Example"
+run/main_scene="res://main.tscn"
+
+[autoload]
+
+DebugBridgeHost="*res://debug/debug_host.gd"
+DebugBridgeTestHost="*res://debug/test_host.gd"
+
+[display]
+
+window/size/viewport_width=640
+window/size/viewport_height=360
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
