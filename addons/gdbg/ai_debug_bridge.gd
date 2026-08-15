@@ -12,6 +12,7 @@ const MAX_SCREENSHOT_INTERVAL := 10.0
 const MAX_SCREENSHOT_WIDTH := 3840
 const MAX_SCREENSHOT_HEIGHT := 2160
 const MAX_SCREENSHOT_SCALE := 4.0
+const HEADLESS_SCREENSHOT_ERROR := "Screenshot capture requires a rendered display; restart the game with 'gdbg run game --windowed'."
 
 const BRIDGE_HELP_TEXT := """
 
@@ -313,13 +314,16 @@ func _capture_with_frame_sync(opts: Dictionary = {}) -> String:
 	var screenshot_manager := get_node_or_null(SCREENSHOT_NODE_PATH)
 	if screenshot_manager == null:
 		return ""
-	if DisplayServer.get_name() == "headless":
-		return screenshot_manager.capture_now(opts)
+	if _is_headless_display():
+		return ""
 	await RenderingServer.frame_post_draw
 	return screenshot_manager.capture_now(opts)
 
 
 func _handle_screenshot_json(args: Dictionary) -> void:
+	if _is_headless_display():
+		_write_json_result({"result": null, "status": "error", "message": HEADLESS_SCREENSHOT_ERROR})
+		return
 	var opts := _parse_screenshot_opts(args)
 	var delay: float = opts["delay"]
 	var count: int = opts["count"]
@@ -347,6 +351,16 @@ func _handle_screenshot_json(args: Dictionary) -> void:
 func _schedule_piggyback_screenshot(opts: Dictionary) -> String:
 	var parsed := _parse_screenshot_opts(opts)
 	var capture_id := _generate_capture_id()
+	if _is_headless_display():
+		_pending_captures[capture_id] = {
+			"paths": [] as Array[String],
+			"status": "error",
+			"message": HEADLESS_SCREENSHOT_ERROR,
+			"total": parsed["count"],
+			"created_at": _get_now_msec(),
+			"completed_at": _get_now_msec(),
+		}
+		return capture_id
 
 	_pending_captures[capture_id] = {
 		"paths": [] as Array[String],
@@ -396,6 +410,8 @@ func _handle_fetch_json(args: Dictionary) -> void:
 		var done: int = capture["paths"].size()
 		var total: int = capture["total"]
 		_write_json_result({"result": null, "status": "pending", "progress": "%d/%d" % [done, total]})
+	elif capture["status"] == "error":
+		_write_json_result({"result": null, "status": "error", "message": capture.get("message", "Screenshot capture failed")})
 	else:
 		_write_json_result({"result": capture["paths"], "status": "ready"})
 
@@ -407,7 +423,7 @@ func _cleanup_expired_captures() -> void:
 	var expired: Array[String] = []
 	for id in _pending_captures:
 		var cap: Dictionary = _pending_captures[id]
-		if cap["status"] == "ready" and cap["completed_at"] > 0:
+		if cap["status"] in ["ready", "error"] and cap["completed_at"] > 0:
 			if (now - cap["completed_at"]) > CAPTURE_EXPIRY_SECONDS * 1000:
 				expired.append(id)
 		elif cap["status"] == "pending" and cap["created_at"] > 0:
@@ -438,3 +454,7 @@ func _get_now_msec() -> int:
 
 func _get_unix_time_ms() -> int:
 	return int(Time.get_unix_time_from_system() * 1000)
+
+
+func _is_headless_display() -> bool:
+	return DisplayServer.get_name() == "headless"
