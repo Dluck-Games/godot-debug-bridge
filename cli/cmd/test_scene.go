@@ -30,8 +30,9 @@ reads them with OS.get_cmdline_user_args().
 Examples:
   gdbg --project-dir /game test scene res://tests/smoke.tscn
   gdbg --project-dir /game test scene res://bench/scenario.tscn -- --json --duration=60`,
-	Args: cobra.ArbitraryArgs,
-	RunE: testSceneRun,
+	Args:         cobra.ArbitraryArgs,
+	SilenceUsage: true,
+	RunE:         testSceneRun,
 }
 
 func init() {
