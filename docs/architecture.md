@@ -1,9 +1,5 @@
 # Architecture
 
-**Status: pre-alpha / repository scaffold**
-
-GDBG is organized around a CLI-first control path:
-
 ```text
 agent / shell / CI
         |
@@ -17,9 +13,23 @@ GDBG runtime addon
 running Godot game
 ```
 
-The CLI is the entry point for automation and external control. The runtime
-addon is the in-game integration boundary. The game remains the authority for
-its own runtime state and behavior.
+The CLI owns process management, package installation, test orchestration,
+local artifact paths, and the client side of protocol version 1. The addon owns
+the runtime IPC loop, screenshots, input injection, console dispatch, and the
+game-agnostic test harnesses.
 
-Editor integration is not a current core goal. The communication transport
-between the CLI and runtime addon is intentionally undecided at this stage.
+Game code stays behind two explicit adapters:
+
+- `DebugBridgeHostBase` or `DebugBridgeConsoleHostBase` provides console
+  commands, optional completion, and project input-service delegation.
+- `DebugBridgeTestHostBase` provides typed fixture construction and production
+  lifecycle operations used by integration and playtest suites.
+
+Protocol version 1 is serialized file IPC under `GDBG_STATE`. That transport is
+an implementation decision for 0.1, not a promise that later major protocol
+versions cannot add another transport.
+
+The addon contains an `EditorPlugin` only to register settings and autoloads.
+Interactive editor integration is not a core goal: `gdbg addon install` enables
+the plugin and invokes Godot's headless import path, and normal run/test/debug
+flows do not require opening the editor UI.

@@ -1,10 +1,26 @@
-# GDBG CLI
+# `gdbg` CLI
 
-**Status: pre-alpha / repository scaffold**
+The CLI starts and stops Godot, installs the runtime addon, performs debug IPC,
+forwards project console commands, reimports assets, and runs unit,
+integration, and playtest tiers.
 
-This directory is reserved for the future GDBG command-line application. The
-planned binary name is `gdbg`.
+Build and verify:
 
-The CLI is intended to start, control, observe, test, and debug Godot games from
-agents, shells, and CI environments. No Go module, command framework, or CLI
-implementation is included in this scaffold.
+```sh
+go test ./...
+go vet ./...
+go build -o gdbg .
+```
+
+Important commands:
+
+- `gdbg addon install` — install/enable `addons/gdbg` and run headless import.
+- `gdbg run game --detach` / `gdbg stop game` — manage the game process.
+- `gdbg console ...` — forward a game-defined console command.
+- `gdbg debug ...` — screenshot, record, input, script, or console IPC.
+- `gdbg test ...` — run gdUnit4, GDBG integration, and GDBG playtest tiers.
+- `gdbg reimport` — rebuild Godot imports and UID sidecars.
+
+Project resolution uses `--project-dir`, then `GDBG_PROJECT_DIR`, then walks up
+from an interactive current directory. Runtime state uses `GDBG_STATE`,
+`XDG_STATE_HOME/gdbg`, or `~/.local/state/gdbg` in that order.
