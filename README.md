@@ -60,10 +60,17 @@ the Godot Editor. Use `--force` to replace an existing addon or `--source
 ```sh
 gdbg --project-dir /path/to/game run game --detach
 gdbg console help
-gdbg debug screenshot --width 1280
 gdbg debug input tap interact
 gdbg --project-dir /path/to/game stop game
+
+# Screenshot and recording need a rendered viewport.
+gdbg --project-dir /path/to/game run game --windowed --detach
+gdbg debug screenshot --width 1280
 ```
+
+The default launch is headless and supports console, script, input, and process
+control. Screenshot and recording commands require `run game --windowed`; a
+headless capture request fails immediately with an actionable error.
 
 The addon owns transport-level operations. Game-specific commands are supplied
 by the project through `DebugBridgeConsoleHostBase` command modules and are

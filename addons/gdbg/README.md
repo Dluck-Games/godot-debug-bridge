@@ -43,6 +43,11 @@ automated test harnesses without depending on a host game's implementation.
 Manual copying and editor-based plugin enablement remain supported, but they are
 not required by the CLI-first workflow.
 
+Console and input IPC work with the CLI's default headless game launch.
+Screenshots and recordings need a rendered viewport, so launch with
+`gdbg run game --windowed`; headless capture requests return a readable error
+instead of touching Godot's dummy renderer.
+
 ## Testing surface
 
 The addon owns a game-agnostic automated-testing framework. The host project
