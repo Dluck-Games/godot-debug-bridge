@@ -28,6 +28,12 @@ test "$(PATH="$(dirname "$godot_bin"):$PATH" GDBG_STATE="$state_dir" \
   "$cli_bin" --project-dir "$fixture_dir" console ping | tail -n 1)" = "pong"
 PATH="$(dirname "$godot_bin"):$PATH" GDBG_STATE="$state_dir" \
   "$cli_bin" --project-dir "$fixture_dir" console help ping | grep -F "Check that the game console is responsive"
+if headless_capture_output=$(PATH="$(dirname "$godot_bin"):$PATH" GDBG_STATE="$state_dir" \
+  "$cli_bin" --project-dir "$fixture_dir" debug screenshot 2>&1); then
+  echo "headless screenshot unexpectedly succeeded" >&2
+  exit 1
+fi
+grep -F "Screenshot capture requires a rendered display" <<<"$headless_capture_output"
 PATH="$(dirname "$godot_bin"):$PATH" GDBG_STATE="$state_dir" \
   "$cli_bin" --project-dir "$fixture_dir" stop
 
