@@ -1,41 +1,63 @@
-name: Validate
+name: Validate and package
 
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+env:
+  GODOT_VERSION: 4.7.1
+
 jobs:
-  structure:
-    name: Repository structure
+  cli:
+    name: CLI tests and release packages
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - name: Validate public product boundary
+        run: scripts/validate-public.sh
+      - name: Build macOS, Windows, and Linux packages
+        run: scripts/package.sh 0.1.0-dev "${GITHUB_SHA::12}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      - name: Upload installable packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: gdbg-packages-${{ github.sha }}
+          path: dist/*
+          if-no-files-found: error
 
-      - name: Verify required files
-        shell: bash
+  addon-smoke:
+    name: Godot addon and console smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - name: Cache Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-linux-x86_64
+      - name: Download Godot
+        if: steps.cache-godot.outputs.cache-hit != 'true'
         run: |
-          required=(
-            .editorconfig
-            .gitattributes
-            .gitignore
-            LICENSE
-            README.md
-            addons/gdbg/LICENSE
-            addons/gdbg/README.md
-            addons/gdbg/plugin.cfg
-            addons/gdbg/plugin.gd
-            cli/README.md
-            protocol/README.md
-            docs/architecture.md
-            examples/minimal/.gitkeep
-          )
-
-          for path in "${required[@]}"; do
-            test -f "$path"
-          done
-
-          test -f addons/gdbg/plugin.cfg
+          curl -fsSL "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-unpacked
+          mkdir -p ~/godot
+          mv "/tmp/godot-unpacked/Godot_v${GODOT_VERSION}-stable_linux.x86_64" ~/godot/godot
+          chmod +x ~/godot/godot
+      - name: Install addon into a clean example and run smoke
+        run: |
+          echo "$HOME/godot" >> "$GITHUB_PATH"
+          export PATH="$HOME/godot:$PATH"
+          GODOT_BIN="$HOME/godot/godot" scripts/smoke-minimal.sh

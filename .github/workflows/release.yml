@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish tagged release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - name: Validate tag and product
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          version="${TAG#v}"
+          grep -q "version=\"${version}\"" addons/gdbg/plugin.cfg
+          scripts/validate-public.sh
+      - name: Package release assets
+        env:
+          TAG: ${{ github.ref_name }}
+        run: scripts/package.sh "${TAG#v}" "${GITHUB_SHA::12}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" dist/* --title "GDBG $TAG" --generate-notes --verify-tag
