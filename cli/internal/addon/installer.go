@@ -423,7 +423,9 @@ func EnablePlugin(projectFile string) (bool, error) {
 
 // EnsureAutoloads installs the runtime nodes needed outside the editor. The
 // operation is idempotent and refuses to replace a project's different
-// autoload with the same name.
+// autoload with the same name. A UID-based reference produced by Godot's
+// script UID rewrite is accepted unchanged when it matches the .uid sidecar
+// shipped with the addon.
 func EnsureAutoloads(projectFile string) (bool, error) {
 	data, err := os.ReadFile(projectFile)
 	if err != nil {
@@ -464,7 +466,7 @@ func EnsureAutoloads(projectFile string) (bool, error) {
 					continue
 				}
 				found = true
-				if trimmed != want {
+				if trimmed != want && !matchesUIDReference(projectFile, required.Path, trimmed, required.Name) {
 					return false, fmt.Errorf("autoload %s already points elsewhere: %s", required.Name, trimmed)
 				}
 				break
@@ -495,4 +497,21 @@ func EnsureAutoloads(projectFile string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// matchesUIDReference reports whether an existing autoload line is Godot's
+// UID-based form of the required path. The expected value is built from the
+// UID recorded in the .uid sidecar next to the required script; the sidecar
+// must be readable and hold a nonempty uid:// value.
+func matchesUIDReference(projectFile, requiredPath, trimmed, name string) bool {
+	sidecar := filepath.Join(filepath.Dir(projectFile), filepath.FromSlash(strings.TrimPrefix(requiredPath, "res://"))+".uid")
+	uid, err := os.ReadFile(sidecar)
+	if err != nil {
+		return false
+	}
+	value := strings.TrimSpace(string(uid))
+	if !strings.HasPrefix(value, "uid://") || strings.TrimPrefix(value, "uid://") == "" {
+		return false
+	}
+	return trimmed == name+`="*`+value+`"`
 }
