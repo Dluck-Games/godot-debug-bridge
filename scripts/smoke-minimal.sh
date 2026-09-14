@@ -3,6 +3,8 @@ set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 godot_bin=${GODOT_BIN:-godot}
+godot_bin=$(command -v "$godot_bin")
+export GODOT_PATH="$godot_bin"
 fixture_dir=$(mktemp -d "${TMPDIR:-/tmp}/gdbg-minimal.XXXXXXXX")
 state_dir=$(mktemp -d "${TMPDIR:-/tmp}/gdbg-state.XXXXXXXX")
 cli_bin="$fixture_dir/gdbg"
