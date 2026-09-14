@@ -1,8 +1,21 @@
 # GDBG Godot addon
 
+<img src="icon.png" alt="GDBG terminal bug icon" width="128" height="128">
+
 Game-agnostic runtime bridge for agent tooling. The addon packages the wire
 protocol, state layout, screenshots, input routing, console framework, and
 automated test harnesses without depending on a host game's implementation.
+
+## Requirements
+
+- **Godot 4.3 or newer (4.x)** for the supported GDBG workflow. Godot 3.x and Godot
+  4.0–4.2 are not supported.
+- Tested on **macOS** with **Godot 4.3** and **Godot 4.7.1**.
+- The companion `gdbg` CLI is a **separate required install** for agent, shell,
+  and CI commands. The addon can be enabled and run in the editor without the
+  CLI, but it provides no standalone editor control UI.
+- Keep the CLI and addon on the **same release version**; compare `gdbg version`
+  with the addon's `plugin.cfg` version.
 
 ## Contents
 
@@ -30,18 +43,45 @@ automated test harnesses without depending on a host game's implementation.
 
 ## Install
 
-1. Run `gdbg --project-dir /path/to/project addon install`. Source checkouts can
+### Recommended: install the CLI
+
+1. Install the `gdbg` CLI from
+   https://github.com/Dluck-Games/godot-debug-bridge#install-the-cli.
+2. Run `gdbg --project-dir /path/to/project addon install`. Source checkouts can
    add `--source /path/to/godot-debug-bridge/addons/gdbg`.
-2. The command copies the addon, enables the plugin in `project.godot`, and runs
+3. The command copies the addon, enables the plugin in `project.godot`, and runs
    a complete headless import. On enable, the plugin registers default settings (state env/app name and the
    playtest suite pattern) and the stable `ScreenshotManager`, `AIDebugBridge`
    and `DebugBridgeTestRuntime` autoloads.
-3. To expose project console commands, register `DebugBridgeHost` before
+4. To expose project console commands, register `DebugBridgeHost` before
    `AIDebugBridge`. To use integration/playtest tiers, also register a
    `DebugBridgeTestHost` adapter before `DebugBridgeTestRuntime`.
 
-Manual copying and editor-based plugin enablement remain supported, but they are
-not required by the CLI-first workflow.
+The CLI installer enables the plugin itself, so no manual plugin enablement is
+required on this path.
+
+### Manual, Asset Library, or store installation
+
+1. Install or extract `addons/gdbg` directly at the project root so the files
+   live at `res://addons/gdbg/` with no extra enclosing folder.
+2. Open the project in Godot and wait for the import to finish.
+3. Open **Project > Project Settings > Plugins** and enable **Godot Debug
+   Bridge**.
+4. Verify that the three autoloads are registered: `ScreenshotManager`,
+   `AIDebugBridge`, and `DebugBridgeTestRuntime`.
+5. Close the editor, then separately install the matching CLI from
+   https://github.com/Dluck-Games/godot-debug-bridge#install-the-cli and check
+   `gdbg version` against the addon's `plugin.cfg` version.
+
+GitHub Releases and CLI installation are the primary distribution channel.
+Asset catalogs are complementary addon discovery and installation routes;
+installing the addon through a catalog does not install the CLI.
+
+Disabling the plugin removes the autoloads it owns, and a normal editor
+shutdown preserves them, so the addon installation survives restarts.
+
+For a working project with console and test host adapters, see the
+[minimal example](https://github.com/Dluck-Games/godot-debug-bridge/blob/main/examples/minimal/README.md).
 
 Console and input IPC work with the CLI's default headless game launch.
 Screenshots and recordings need a rendered viewport, so launch with
