@@ -9,11 +9,7 @@ import (
 )
 
 func EnsureImportCache(godotBin, projectDir string) error {
-	godotDir := filepath.Join(projectDir, ".godot")
-	if _, err := os.Stat(godotDir); err == nil {
-		return nil
-	}
-	fmt.Fprintf(os.Stderr, "Import cache missing, running headless import...\n")
+	fmt.Fprintf(os.Stderr, "Syncing imported assets with headless import...\n")
 	return RunImport(godotBin, projectDir)
 }
 
