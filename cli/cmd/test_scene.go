@@ -24,8 +24,12 @@ inside the selected project. Godot is discovered via GODOT_PATH or the
 platform default locations, the import cache is ensured, stdout/stderr are
 streamed to the terminal, and GDBG_STATE is injected into the child process.
 
-Arguments after '--' are forwarded to Godot as user arguments; the scene
-reads them with OS.get_cmdline_user_args().
+The inherited global --verbose/-v flag enables Godot engine verbose output
+for this command; it is placed among the engine arguments, not forwarded as a
+user argument. Arguments after '--' are forwarded to Godot literally as user
+arguments; the scene reads them with OS.get_cmdline_user_args(). A user-supplied
+--verbose after '--' is therefore delivered as an OS user argument and stays
+distinct from the engine --verbose flag.
 
 Examples:
   gdbg --project-dir /game test scene res://tests/smoke.tscn
@@ -63,14 +67,14 @@ func testSceneRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return runTestScene(godotBin, projectDir, sceneRes, userArgs)
+	return runTestScene(godotBin, projectDir, sceneRes, userArgs, flagVerbose)
 }
 
 // runTestScene launches Godot with the scene, streaming stdio and injecting
-// GDBG_STATE. A nonzero Godot exit is returned as an error so the CLI exits
-// with a nonzero status.
-func runTestScene(godotBin, projectDir, sceneRes string, userArgs []string) error {
-	child := exec.Command(godotBin, buildSceneGodotArgs(sceneRes, userArgs)...)
+// GDBG_STATE. verbose enables Godot engine verbose logging. A nonzero Godot
+// exit is returned as an error so the CLI exits with a nonzero status.
+func runTestScene(godotBin, projectDir, sceneRes string, userArgs []string, verbose bool) error {
+	child := exec.Command(godotBin, buildSceneGodotArgs(sceneRes, userArgs, verbose)...)
 	child.Dir = projectDir
 	child.Stdin = os.Stdin
 	child.Stdout = os.Stdout
@@ -148,9 +152,16 @@ func isWithinProject(base, target string) bool {
 }
 
 // buildSceneGodotArgs assembles the Godot command line: headless by default,
-// the scene path, then a '--' separator followed by the user arguments.
-func buildSceneGodotArgs(sceneRes string, userArgs []string) []string {
-	args := []string{"--headless", sceneRes}
+// the engine verbose flag when verbose is set, the scene path, then a '--'
+// separator followed by the user arguments. Engine flags precede the scene and
+// the '--' separator, so user arguments are forwarded literally and a
+// user-supplied --verbose stays distinct from the engine flag.
+func buildSceneGodotArgs(sceneRes string, userArgs []string, verbose bool) []string {
+	args := []string{"--headless"}
+	if verbose {
+		args = append(args, "--verbose")
+	}
+	args = append(args, sceneRes)
 	if len(userArgs) > 0 {
 		args = append(args, "--")
 		args = append(args, userArgs...)

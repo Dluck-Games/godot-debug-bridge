@@ -156,6 +156,7 @@ func TestBuildSceneGodotArgs(t *testing.T) {
 		name     string
 		scene    string
 		userArgs []string
+		verbose  bool
 		want     []string
 	}{
 		{
@@ -169,12 +170,39 @@ func TestBuildSceneGodotArgs(t *testing.T) {
 			userArgs: []string{"--json", "--duration=60"},
 			want:     []string{"--headless", "res://tests/smoke.tscn", "--", "--json", "--duration=60"},
 		},
+		{
+			name:    "engine verbose before scene",
+			scene:   "res://tests/smoke.tscn",
+			verbose: true,
+			want:    []string{"--headless", "--verbose", "res://tests/smoke.tscn"},
+		},
+		{
+			name:     "engine verbose before scene and before separator",
+			scene:    "res://tests/smoke.tscn",
+			userArgs: []string{"--json", "--duration=60"},
+			verbose:  true,
+			want:     []string{"--headless", "--verbose", "res://tests/smoke.tscn", "--", "--json", "--duration=60"},
+		},
+		{
+			name:     "user verbose after separator stays a user arg",
+			scene:    "res://tests/smoke.tscn",
+			userArgs: []string{"--verbose", "--json"},
+			verbose:  false,
+			want:     []string{"--headless", "res://tests/smoke.tscn", "--", "--verbose", "--json"},
+		},
+		{
+			name:     "engine and user verbose remain distinct",
+			scene:    "res://tests/smoke.tscn",
+			userArgs: []string{"--verbose"},
+			verbose:  true,
+			want:     []string{"--headless", "--verbose", "res://tests/smoke.tscn", "--", "--verbose"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := buildSceneGodotArgs(tc.scene, tc.userArgs)
+			got := buildSceneGodotArgs(tc.scene, tc.userArgs, tc.verbose)
 			if !reflect.DeepEqual(got, tc.want) {
-				t.Fatalf("buildSceneGodotArgs(%q, %v) = %v, want %v", tc.scene, tc.userArgs, got, tc.want)
+				t.Fatalf("buildSceneGodotArgs(%q, %v, %v) = %v, want %v", tc.scene, tc.userArgs, tc.verbose, got, tc.want)
 			}
 		})
 	}
