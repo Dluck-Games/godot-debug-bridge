@@ -248,3 +248,101 @@ func TestRenderASCIICountsJUnitErrorsAsFailed(t *testing.T) {
 		}
 	}
 }
+
+func TestAllPassedRejectsInvalidGdUnitResults(t *testing.T) {
+	cases := []struct {
+		name   string
+		gdunit *GdUnitResult
+	}{
+		{
+			name:   "missing report",
+			gdunit: &GdUnitResult{ExitCode: 0, ValidationReason: "results.xml not found after run"},
+		},
+		{
+			name:   "malformed report",
+			gdunit: &GdUnitResult{ExitCode: 0, ValidationReason: "results.xml could not be parsed: unexpected EOF"},
+		},
+		{
+			name:   "zero tests",
+			gdunit: &GdUnitResult{Parsed: true, Suites: JUnitTestSuites{Tests: 0}, ValidationReason: "results.xml reported zero tests"},
+		},
+		{
+			name:   "unparsed without explicit reason",
+			gdunit: &GdUnitResult{ExitCode: 0},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			report := &TestReport{GdUnit: tc.gdunit}
+			if report.AllPassed() {
+				t.Fatal("invalid gdUnit result must not report all passed")
+			}
+			if got := report.ExitCode(); got != 1 {
+				t.Fatalf("ExitCode() = %d, want 1", got)
+			}
+		})
+	}
+}
+
+func TestRenderASCIIExplainsInvalidGdUnitResult(t *testing.T) {
+	const rawLogPath = "logs/gdunit/raw-output.log"
+	cases := []struct {
+		name   string
+		gdunit *GdUnitResult
+		reason string
+	}{
+		{
+			name:   "missing report",
+			reason: "results.xml not found after run",
+		},
+		{
+			name:   "malformed report",
+			reason: "results.xml could not be parsed: unexpected EOF",
+		},
+		{
+			name:   "zero tests",
+			reason: "results.xml reported zero tests",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gdunit := &GdUnitResult{
+				ExitCode:         137,
+				RawOutput:        "engine banner\nlast line before failure\n",
+				RawLogPath:       rawLogPath,
+				ValidationReason: tc.reason,
+			}
+			if tc.name == "zero tests" {
+				gdunit.Parsed = true
+				gdunit.Suites = JUnitTestSuites{Tests: 0}
+			}
+			report := &TestReport{GdUnit: gdunit}
+
+			if report.AllPassed() {
+				t.Fatal("invalid gdUnit result must not report all passed")
+			}
+
+			for _, verbose := range []bool{false, true} {
+				var buf bytes.Buffer
+				RenderASCII(&buf, report, verbose)
+				got := buf.String()
+				for _, want := range []string{
+					tc.reason,
+					"engine exit code: 137",
+					rawLogPath,
+					"last line before failure",
+					"SOME TESTS FAILED",
+				} {
+					if !strings.Contains(got, want) {
+						t.Fatalf("verbose=%v output missing %q, got %q", verbose, want, got)
+					}
+				}
+				if strings.Contains(got, "ALL TESTS PASSED") {
+					t.Fatalf("verbose=%v must not report success for invalid gdUnit result, got %q", verbose, got)
+				}
+			}
+		})
+	}
+}

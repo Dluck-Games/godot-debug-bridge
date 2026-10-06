@@ -4,7 +4,6 @@ package testrunner
 import (
 	"fmt"
 	"io"
-	"os"
 	"strings"
 )
 
@@ -69,11 +68,13 @@ func (r *TestReport) TotalSkipped() int {
 
 func (r *TestReport) AllPassed() bool {
 	if r.GdUnit != nil {
-		if r.GdUnit.Parsed {
-			if r.GdUnit.Suites.Failures+r.GdUnit.Suites.Errors > 0 {
-				return false
-			}
-		} else if r.GdUnit.ExitCode != 0 {
+		// A missing, malformed, or zero-test gdUnit report is never a pass,
+		// regardless of the engine exit code. Valid parsed reports still rely
+		// on their own failure/error counts, even if the engine exit differs.
+		if !r.GdUnit.Valid() {
+			return false
+		}
+		if r.GdUnit.Suites.Failures+r.GdUnit.Suites.Errors > 0 {
 			return false
 		}
 	}
@@ -144,7 +145,7 @@ func renderSimplified(w io.Writer, report *TestReport) {
 
 	if hasFailures {
 		// Show failure details
-		if report.GdUnit != nil && report.GdUnit.Parsed {
+		if report.GdUnit != nil && report.GdUnit.Valid() {
 			var failures []string
 			for _, suite := range report.GdUnit.Suites.TestSuites {
 				for _, tc := range suite.Cases {
@@ -160,13 +161,8 @@ func renderSimplified(w io.Writer, report *TestReport) {
 					fmt.Fprintln(w, f)
 				}
 			}
-		} else if report.GdUnit != nil && !report.GdUnit.Parsed {
-			fmt.Fprintln(w)
-			fmt.Fprintln(w, "  (no JUnit report found)")
-			// Dump last 30 lines of raw output for diagnosis
-			if report.GdUnit.RawOutput != "" {
-				dumpRawOutputTail(report.GdUnit.RawOutput)
-			}
+		} else if report.GdUnit != nil {
+			renderGdUnitProblem(w, report.GdUnit)
 		}
 
 		// Integration failures
@@ -231,7 +227,7 @@ func renderVerbose(w io.Writer, report *TestReport) {
 		fmt.Fprintln(w, "  "+strings.Repeat("─", 28))
 		fmt.Fprintln(w)
 
-		if report.GdUnit.Parsed {
+		if report.GdUnit.Valid() {
 			fmt.Fprintf(w, "  %-38s %5s %5s %5s %7s\n", "Suite", "Tests", "Pass", "Fail", "Time")
 			fmt.Fprintf(w, "  %-38s %5s %5s %5s %7s\n",
 				strings.Repeat("─", 38), strings.Repeat("─", 5),
@@ -275,7 +271,7 @@ func renderVerbose(w io.Writer, report *TestReport) {
 				}
 			}
 		} else {
-			fmt.Fprintln(w, "  (no JUnit report found)")
+			renderGdUnitProblem(w, report.GdUnit)
 		}
 	}
 
@@ -342,13 +338,32 @@ func renderVerbose(w io.Writer, report *TestReport) {
 	fmt.Fprintln(w, bar)
 }
 
-// dumpRawOutputTail prints the last ~30 lines of raw gdunit4 output to stderr
-// for diagnosis when no JUnit report was found.
-func dumpRawOutputTail(raw string) {
+// renderGdUnitProblem explains why a gdUnit result is not trustworthy
+// (missing/malformed/zero-test report) and points at the persisted evidence.
+// Diagnostics are written to w so report modes never lose them to os.Stderr.
+func renderGdUnitProblem(w io.Writer, g *GdUnitResult) {
+	fmt.Fprintln(w)
+	reason := g.ValidationReason
+	if reason == "" {
+		reason = "no trustworthy JUnit report was produced"
+	}
+	fmt.Fprintf(w, "  gdUnit result invalid: %s\n", reason)
+	fmt.Fprintf(w, "  engine exit code: %d\n", g.ExitCode)
+	if g.RawLogPath != "" {
+		fmt.Fprintf(w, "  raw output: %s\n", g.RawLogPath)
+	}
+	if g.RawOutput != "" {
+		dumpRawOutputTail(w, g.RawOutput)
+	}
+}
+
+// dumpRawOutputTail prints the last ~30 lines of raw gdunit4 output to w for
+// diagnosis when the JUnit result is missing or invalid.
+func dumpRawOutputTail(w io.Writer, raw string) {
 	lines := strings.Split(raw, "\n")
 	start := max(len(lines)-30, 0)
-	fmt.Fprintln(os.Stderr, "  Last output lines:")
+	fmt.Fprintln(w, "  Last output lines:")
 	for _, line := range lines[start:] {
-		fmt.Fprintf(os.Stderr, "  %s\n", line)
+		fmt.Fprintf(w, "  %s\n", line)
 	}
 }

@@ -57,12 +57,39 @@ type GdUnitResult struct {
 	ExitCode  int
 	Parsed    bool
 	RawOutput string // captured gdUnit4 stdout+stderr for failure diagnostics
+
+	// RawLogPath is the persisted location of the complete, unfiltered child
+	// stdout+stderr capture written under the per-state gdunit report dir.
+	RawLogPath string
+
+	// ValidationReason is non-empty when the result is not trustworthy (missing
+	// results.xml, malformed/unreadable XML, or a parsed report with zero
+	// tests). It carries the explicit reason the unit tier cannot be trusted.
+	ValidationReason string
 }
 
+// Valid reports whether the gdUnit result is a trustworthy parsed JUnit report.
+// A missing/malformed report or a parsed report that declares zero tests is
+// never valid, regardless of the engine exit code.
+func (r *GdUnitResult) Valid() bool {
+	return r != nil && r.Parsed && r.ValidationReason == "" && r.Suites.Tests > 0
+}
+
+// rawOutputLogName is the generic file name used to persist the complete
+// gdUnit4 child output for evidence, independent of any test tier naming.
+const rawOutputLogName = "raw-output.log"
+
 func RunGdUnit(godotBin, projectDir string, opts RunOptions) (*GdUnitResult, error) {
-	// Clean reports
+	// Recreate the report directory from scratch. Stale artefacts from a prior
+	// run must never be mistaken for this run's evidence, and our own cleanup /
+	// create failures must surface instead of being silently ignored.
 	reportsDir := filepath.Join(logStateBase(), "gdunit")
-	os.RemoveAll(reportsDir)
+	if err := os.RemoveAll(reportsDir); err != nil {
+		return nil, fmt.Errorf("cannot clear gdUnit report directory %s: %w", reportsDir, err)
+	}
+	if err := os.MkdirAll(reportsDir, 0o755); err != nil {
+		return nil, fmt.Errorf("cannot create gdUnit report directory %s: %w", reportsDir, err)
+	}
 	reportsArg, err := filepath.Rel(projectDir, reportsDir)
 	if err != nil {
 		return nil, fmt.Errorf("cannot resolve gdUnit report directory: %w", err)
@@ -77,26 +104,55 @@ func RunGdUnit(godotBin, projectDir string, opts RunOptions) (*GdUnitResult, err
 	cmd.Stdout = &outputBuf
 	cmd.Stderr = &outputBuf
 
-	err = cmd.Run()
+	runErr := cmd.Run()
 	exitCode := 0
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+	if runErr != nil {
+		if exitErr, ok := runErr.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
 		} else {
-			return nil, fmt.Errorf("failed to run gdUnit4: %w", err)
+			return nil, fmt.Errorf("failed to run gdUnit4: %w", runErr)
 		}
 	}
 
-	result := &GdUnitResult{ExitCode: exitCode, RawOutput: outputBuf.String()}
+	return finalizeGdUnitResult(reportsDir, exitCode, outputBuf.Bytes())
+}
 
-	// Find and parse results.xml
+// finalizeGdUnitResult captures the child's exit code and complete output,
+// persists the raw capture, then reads and validates the JUnit report. It
+// performs no process execution so every post-execution path can be exercised
+// deterministically in tests with a temp directory.
+func finalizeGdUnitResult(reportsDir string, exitCode int, raw []byte) (*GdUnitResult, error) {
+	// Persist the complete, unfiltered child output next to the reports so an
+	// invalid or partial run still leaves diagnosable evidence on disk.
+	rawLogPath := filepath.Join(reportsDir, rawOutputLogName)
+	if err := os.WriteFile(rawLogPath, raw, 0o644); err != nil {
+		return nil, fmt.Errorf("cannot write gdUnit raw output log %s: %w", rawLogPath, err)
+	}
+
+	result := &GdUnitResult{
+		ExitCode:   exitCode,
+		RawOutput:  string(raw),
+		RawLogPath: rawLogPath,
+	}
+
+	// Find and parse results.xml. Missing or malformed reports are explicit
+	// failures, never a silent pass.
 	xmlPath := findResultsXML(reportsDir)
-	if xmlPath != "" {
-		suites, err := parseJUnitXML(xmlPath)
-		if err == nil {
-			result.Suites = *suites
-			result.Parsed = true
-		}
+	if xmlPath == "" {
+		result.ValidationReason = "results.xml not found after run"
+		return result, nil
+	}
+
+	suites, err := parseJUnitXML(xmlPath)
+	if err != nil {
+		result.ValidationReason = fmt.Sprintf("results.xml could not be parsed: %v", err)
+		return result, nil
+	}
+
+	result.Suites = *suites
+	result.Parsed = true
+	if suites.Tests <= 0 {
+		result.ValidationReason = "results.xml reported zero tests"
 	}
 
 	return result, nil
