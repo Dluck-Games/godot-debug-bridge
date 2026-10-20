@@ -135,6 +135,9 @@ A suite is a first-level directory under `tests/<tier>/` (`tests/unit/system/`
 is `--suite system`); test files directly in `tests/<tier>/` form the suite
 `root`. `--suite all` adds the whole `tests/<tier>/` directory, so for the unit
 tier it runs the same `--add res://tests/unit/` a raw gdUnit4 run would.
+Before the unit and integration tiers launch Godot, GDBG imports the project
+headlessly (as `gdbg run` does) so new or renamed `class_name` scripts resolve.
+
 The unit tier requires gdUnit4 at `addons/gdUnit4/`. GDBG checks for
 `plugin.cfg` and `bin/GdUnitCmdTool.gd` before launching Godot and returns an
 actionable error when gdUnit4 is not installed. Integration and playtest tiers

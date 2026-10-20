@@ -4,6 +4,8 @@ package testrunner
 import (
 	"fmt"
 	"os"
+
+	"github.com/Dluck-Games/godot-debug-bridge/cli/internal/godot"
 )
 
 type Tier int
@@ -57,6 +59,15 @@ func Run(godotBin, projectDir string, tiers []Tier, opts RunOptions) (*TestRepor
 		tierSet[t] = true
 	}
 	numTiers := len(tierSet)
+
+	// Unit and integration suites load project scripts by class_name, so sync
+	// the import cache first, exactly as `gdbg run` does; otherwise scripts
+	// added or renamed since the last import fail to parse inside the tests.
+	if tierSet[TierUnit] || tierSet[TierIntegration] {
+		if err := godot.EnsureImportCache(godotBin, projectDir); err != nil {
+			return nil, fmt.Errorf("import cache failed: %w", err)
+		}
+	}
 
 	step := 1
 	for _, t := range tierOrder() {

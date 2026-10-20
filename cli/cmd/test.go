@@ -35,6 +35,9 @@ test files directly in tests/<tier>/ form the suite 'root'. 'all' adds the whole
 directory, so for the unit tier it is the same --add res://tests/unit/ a raw gdUnit4 run uses.
 The playtest tier is flat: tests/playtest/playtest_<suite>.gd.
 
+Before the unit and integration tiers launch Godot, the project is imported headlessly
+(as 'gdbg run' does) so new or renamed class_name scripts resolve inside the tests.
+
 Playtest display: default is background (window exists for recording, does not take focus).
 Use --headless for no window, or --windowed to watch in the foreground.
 
