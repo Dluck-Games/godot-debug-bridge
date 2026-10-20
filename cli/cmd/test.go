@@ -30,6 +30,10 @@ var testCmd = &cobra.Command{
 
 Tiers (positional, comma-separable): one or more of 'unit', 'integration', 'playtest'.
 Suites (--suite, required): comma-separated suite names, or 'all' for every discovered suite.
+A suite is a first-level directory under tests/<tier>/ (tests/unit/system/ is suite 'system');
+test files directly in tests/<tier>/ form the suite 'root'. 'all' adds the whole tests/<tier>/
+directory, so for the unit tier it is the same --add res://tests/unit/ a raw gdUnit4 run uses.
+The playtest tier is flat: tests/playtest/playtest_<suite>.gd.
 
 Playtest display: default is background (window exists for recording, does not take focus).
 Use --headless for no window, or --windowed to watch in the foreground.
@@ -40,6 +44,7 @@ Dependencies:
 
 Examples:
   gdbg test unit --suite system           # unit tests for the 'system' suite
+  gdbg test unit --suite root             # unit test files directly under tests/unit/
   gdbg test unit,integration --suite gameplay  # matching unit + integration suites
   gdbg test unit,integration --suite all  # all unit + integration suites
   gdbg test playtest --suite smoke        # playtest 'smoke' suite (background)
@@ -59,7 +64,7 @@ func init() {
 	testCmd.Flags().BoolVar(&flagRecord, "record", false, "record automated playtest video (only valid with playtest)")
 	testCmd.Flags().BoolVar(&flagHeadless, "headless", false, "run playtest with no window (only valid with playtest; incompatible with --record and --windowed)")
 	testCmd.Flags().BoolVar(&flagPlaytestWindowed, "windowed", false, "show the playtest window in the foreground (only valid with playtest; incompatible with --headless)")
-	testCmd.Flags().StringVar(&flagSuite, "suite", "", "comma-separated suite names to run (e.g. gameplay,render,system), or 'all' for all discovered suites")
+	testCmd.Flags().StringVar(&flagSuite, "suite", "", "comma-separated suite names to run (e.g. gameplay,render,system,root), or 'all' for all discovered suites")
 	testCmd.Flags().StringVar(&flagPlaytestFrameDir, "playtest-frame-dir", "", "explicit directory for automated playtest frames")
 	testCmd.MarkFlagsMutuallyExclusive("headless", "windowed")
 }
@@ -183,32 +188,21 @@ func resolveTestSelection(cmd *cobra.Command, args []string, projectDir string) 
 }
 
 // validateSuiteExistence checks that each named suite exists in at least one
-// of the listed tiers. For unit/integration: tests/<tier>/<suite>/ directory.
-// For playtest: tests/playtest/playtest_<suite>.gd file.
+// of the listed tiers. For unit/integration: a tests/<tier>/<suite>/ directory,
+// or "root" when test files exist directly under tests/<tier>/. For playtest:
+// a tests/playtest/playtest_<suite>.gd file.
 func validateSuiteExistence(projectDir string, tiers []testrunner.Tier, suites []string) error {
 	for _, suite := range suites {
 		found := false
 		for _, tier := range tiers {
-			var candidates []string
 			switch tier {
 			case testrunner.TierUnit:
-				candidates = []string{filepath.Join(projectDir, "tests", "unit", suite)}
+				found = testrunner.UnitSuiteExists(projectDir, suite)
 			case testrunner.TierIntegration:
-				candidates = []string{
-					filepath.Join(projectDir, "tests", "integration", suite),
-					filepath.Join(projectDir, "tests", "integration", "test_"+suite+".gd"),
-				}
+				found = testrunner.IntegrationSuiteExists(projectDir, suite)
 			case testrunner.TierPlaytest:
-				candidates = []string{filepath.Join(projectDir, "tests", "playtest", "playtest_"+suite+".gd")}
-			}
-			for _, path := range candidates {
-				if stat, err := os.Stat(path); err == nil {
-					wantDir := tier == testrunner.TierUnit || (tier == testrunner.TierIntegration && filepath.Ext(path) == "")
-					if stat.IsDir() == wantDir {
-						found = true
-						break
-					}
-				}
+				_, err := os.Stat(filepath.Join(projectDir, "tests", "playtest", "playtest_"+suite+".gd"))
+				found = err == nil
 			}
 			if found {
 				break

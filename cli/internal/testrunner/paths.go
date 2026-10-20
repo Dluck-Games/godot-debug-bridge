@@ -12,9 +12,16 @@ const (
 	// tier.
 	GdUnit4CmdToolRes = "res://addons/gdUnit4/bin/GdUnitCmdTool.gd"
 
+	// TestsDirRes is the res:// root of every test tier.
+	TestsDirRes = "res://tests/"
+
 	// UnitTestsDirRes is the res:// unit suite root added when no suite filter
 	// is selected.
-	UnitTestsDirRes = "res://tests/unit/"
+	UnitTestsDirRes = TestsDirRes + "unit/"
+
+	// RootSuite names the suite formed by the test files directly under
+	// tests/<tier>/, as opposed to a first-level suite directory.
+	RootSuite = "root"
 
 	// DebugBridgeIntegrationRunnerRes is the GDBG addon scene that
 	// hosts IntegrationTestSuite cases.

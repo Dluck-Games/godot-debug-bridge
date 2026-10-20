@@ -9,7 +9,7 @@ import (
 )
 
 func TestBuildGdUnitArgsDoesNotEnableGodotVerboseForCliVerbose(t *testing.T) {
-	args := buildGdUnitArgs(RunOptions{
+	args := buildGdUnitArgs(t.TempDir(), RunOptions{
 		Verbose: true,
 		Suite:   []string{"system"},
 	}, "../logs/gdunit")
@@ -248,5 +248,31 @@ func TestFinalizeGdUnitResultRecordsScriptLoadFailures(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("report output missing %q:\n%s", want, out.String())
 		}
+	}
+}
+
+func TestBuildGdUnitAddArgsRootSuiteAddsTopLevelFiles(t *testing.T) {
+	projectDir := t.TempDir()
+	for _, rel := range []string{"tests/unit/test_beta.gd", "tests/unit/test_alpha.gd", "tests/unit/system/test_nested.gd", "tests/unit/notes.txt"} {
+		full := filepath.Join(projectDir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writeGdUnitTestFile(t, full, "extends GdUnitTestSuite")
+	}
+
+	got := buildGdUnitAddArgs(projectDir, []string{RootSuite, "system"})
+	want := []string{"--add", UnitTestsDirRes + "test_alpha.gd", "--add", UnitTestsDirRes + "test_beta.gd", "--add", UnitTestsDirRes + "system/"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("root suite args = %v, want %v", got, want)
+	}
+	if all := buildGdUnitAddArgs(projectDir, nil); strings.Join(all, " ") != "--add "+UnitTestsDirRes {
+		t.Fatalf("--suite all must add the whole unit directory, got %v", all)
+	}
+	if !UnitSuiteExists(projectDir, RootSuite) || !UnitSuiteExists(projectDir, "system") || UnitSuiteExists(projectDir, "missing") {
+		t.Fatal("suite existence must name root and first-level directories only")
+	}
+	if UnitSuiteExists(t.TempDir(), RootSuite) {
+		t.Fatal("root must not exist without top-level unit test files")
 	}
 }

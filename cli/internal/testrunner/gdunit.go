@@ -111,7 +111,7 @@ func RunGdUnit(godotBin, projectDir string, opts RunOptions) (*GdUnitResult, err
 	}
 	reportsArg = filepath.ToSlash(reportsArg)
 
-	args := buildGdUnitArgs(opts, reportsArg)
+	args := buildGdUnitArgs(projectDir, opts, reportsArg)
 	cmd := exec.Command(godotBin, args...)
 	cmd.Dir = projectDir
 
@@ -211,12 +211,12 @@ func parseScriptLoadFailures(raw string) []GdUnitLoadFailure {
 	return failures
 }
 
-func buildGdUnitArgs(opts RunOptions, reportsArg string) []string {
+func buildGdUnitArgs(projectDir string, opts RunOptions, reportsArg string) []string {
 	args := []string{
 		"--headless",
 		"-s", GdUnit4CmdToolRes,
 	}
-	args = append(args, buildGdUnitAddArgs(opts.Suite)...)
+	args = append(args, buildGdUnitAddArgs(projectDir, opts.Suite)...)
 	args = append(args, "--ignoreHeadlessMode", "--report-directory", reportsArg)
 	// GDBG CLI verbose controls our parsed report only. Do not pass --verbose to
 	// Godot/gdUnit here; it enables engine exit diagnostics such as StringName
@@ -224,18 +224,51 @@ func buildGdUnitArgs(opts RunOptions, reportsArg string) []string {
 	return args
 }
 
-// buildGdUnitAddArgs constructs the --add arguments for gdunit4 based on suite filter.
-// If no suites specified, adds the entire unit test directory.
-// Otherwise, adds each suite subdirectory individually.
-func buildGdUnitAddArgs(suites []string) []string {
+// buildGdUnitAddArgs constructs the --add arguments for gdUnit4 from the suite
+// filter. No filter adds the whole unit directory, exactly as a raw gdUnit4
+// run does. A named suite adds its first-level directory; the root suite adds
+// each script directly under tests/unit/ (gdUnit4 --add accepts files too).
+func buildGdUnitAddArgs(projectDir string, suites []string) []string {
 	if len(suites) == 0 {
 		return []string{"--add", UnitTestsDirRes}
 	}
 	var args []string
 	for _, s := range suites {
+		if s == RootSuite {
+			for _, f := range rootUnitSuiteFiles(projectDir) {
+				args = append(args, "--add", UnitTestsDirRes+f)
+			}
+			continue
+		}
 		args = append(args, "--add", UnitTestsDirRes+s+"/")
 	}
 	return args
+}
+
+// rootUnitSuiteFiles lists the scripts directly under tests/unit/, in name
+// order. They form the root suite.
+func rootUnitSuiteFiles(projectDir string) []string {
+	entries, err := os.ReadDir(unitTestsDir(projectDir))
+	if err != nil {
+		return nil
+	}
+	var files []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".gd") {
+			files = append(files, e.Name())
+		}
+	}
+	return files
+}
+
+// UnitSuiteExists reports whether suite names a first-level directory under
+// tests/unit/, or the root suite when scripts exist directly under it.
+func UnitSuiteExists(projectDir, suite string) bool {
+	if suite == RootSuite {
+		return len(rootUnitSuiteFiles(projectDir)) > 0
+	}
+	stat, err := os.Stat(filepath.Join(unitTestsDir(projectDir), suite))
+	return err == nil && stat.IsDir()
 }
 
 func findResultsXML(reportsDir string) string {

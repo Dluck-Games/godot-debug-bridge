@@ -107,6 +107,11 @@ func discoverIntegrationTestSuites(dir string, suiteFilter []string) ([]string, 
 				rel, _ := filepath.Rel(dir, path)
 				matched := false
 				for _, s := range suiteFilter {
+					// The root suite is every file directly under the tier directory.
+					if s == RootSuite && !strings.Contains(filepath.ToSlash(rel), "/") {
+						matched = true
+						break
+					}
 					// Match by subdirectory prefix: "gameplay/test_flow.gd" matches suite "gameplay"
 					if strings.HasPrefix(filepath.ToSlash(rel), s+"/") {
 						matched = true
@@ -127,6 +132,22 @@ func discoverIntegrationTestSuites(dir string, suiteFilter []string) ([]string, 
 		return nil
 	})
 	return suites, err
+}
+
+// IntegrationSuiteExists reports whether suite names a first-level directory
+// under tests/integration/, a test_<suite>.gd file there, or the root suite
+// when integration suites exist directly under it.
+func IntegrationSuiteExists(projectDir, suite string) bool {
+	dir := integrationTestsDir(projectDir)
+	if suite == RootSuite {
+		suites, _ := discoverIntegrationTestSuites(dir, []string{RootSuite})
+		return len(suites) > 0
+	}
+	if stat, err := os.Stat(filepath.Join(dir, suite)); err == nil && stat.IsDir() {
+		return true
+	}
+	stat, err := os.Stat(filepath.Join(dir, "test_"+suite+".gd"))
+	return err == nil && !stat.IsDir()
 }
 
 func isIntegrationTestSuite(path string) bool {
