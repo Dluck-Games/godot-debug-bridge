@@ -276,3 +276,108 @@ func TestBuildGdUnitAddArgsRootSuiteAddsTopLevelFiles(t *testing.T) {
 		t.Fatal("root must not exist without top-level unit test files")
 	}
 }
+
+func TestVerdictSumsSuiteErrorsOmittedFromRoot(t *testing.T) {
+	dir := t.TempDir()
+	// gdUnit4 writes no `errors` attribute on <testsuites>; only the suites carry it.
+	writeGdUnitTestFile(t, filepath.Join(dir, "results.xml"),
+		`<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="3" failures="1" skipped="0" time="0.02">
+  <testsuite name="test_drop" tests="2" failures="0" errors="1" skipped="0" time="0.01">
+    <testcase name="test_ok" classname="test_drop" time="0.01"/>
+    <testcase name="test_boom" classname="test_drop" time="0.00">
+      <error message="ERROR: res://tests/unit/test_drop.gd:9" type="ABORT"><![CDATA[
+Godot Runtime Error !
+Error: 'Trying to return a previously freed instance.'
+]]></error>
+    </testcase>
+  </testsuite>
+  <testsuite name="test_math" tests="1" failures="1" errors="0" skipped="0" time="0.01">
+    <testcase name="test_sum" classname="test_math" time="0.01">
+      <failure message="FAILED: res://tests/unit/math/test_math.gd:12" type="FAILURE">Expecting: '3' but was '4'</failure>
+    </testcase>
+  </testsuite>
+</testsuites>`)
+
+	result, err := finalizeGdUnitResult(dir, gdUnitExitFailures, []byte("Exit code: 100\n"))
+	if err != nil {
+		t.Fatalf("finalizeGdUnitResult() error = %v", err)
+	}
+	v := result.Verdict()
+	if v.Passed() {
+		t.Fatal("errored cases must fail the verdict even though the root omits errors")
+	}
+	if v.Tests != 3 || v.Failures != 1 || v.Errors != 1 {
+		t.Fatalf("counts = %+v, want tests 3 failures 1 errors 1", v.GdUnitCounts)
+	}
+	if len(v.Reasons) != 1 || !strings.Contains(v.Reasons[0], "1 failed and 1 errored") {
+		t.Fatalf("Reasons = %q, want exactly the case-count reason (exit 100 agrees with the report)", v.Reasons)
+	}
+	report := &TestReport{GdUnit: result}
+	if report.TotalFailed() != 2 || report.TotalPassed() != 1 {
+		t.Fatalf("TotalFailed/TotalPassed = %d/%d, want 2/1", report.TotalFailed(), report.TotalPassed())
+	}
+	for _, verbose := range []bool{false, true} {
+		var out bytes.Buffer
+		RenderASCII(&out, report, verbose)
+		for _, want := range []string{
+			"Unit tier failed:",
+			"x test_drop.test_boom",
+			"ERROR: res://tests/unit/test_drop.gd:9",
+			"Trying to return a previously freed instance",
+			"x test_math.test_sum",
+			"Expecting: '3' but was '4'",
+			result.RawLogPath,
+			"SOME TESTS FAILED",
+		} {
+			if !strings.Contains(out.String(), want) {
+				t.Fatalf("verbose=%v output missing %q:\n%s", verbose, want, out.String())
+			}
+		}
+	}
+}
+
+func TestVerdictFailsWhenExitCodeDisagreesWithReport(t *testing.T) {
+	clean := JUnitTestSuites{Tests: 1, TestSuites: []JUnitTestSuite{{Name: "s", Tests: 1, Cases: []JUnitTestCase{{Name: "test_ok"}}}}}
+
+	disagree := &GdUnitResult{Parsed: true, ExitCode: gdUnitExitFailures, Suites: clean}
+	v := disagree.Verdict()
+	if v.Passed() || len(v.Reasons) != 1 || !strings.Contains(v.Reasons[0], "disagree") {
+		t.Fatalf("exit 100 with a clean report must fail with the disagreement reason, got %q", v.Reasons)
+	}
+	var out bytes.Buffer
+	RenderASCII(&out, &TestReport{GdUnit: disagree}, false)
+	if !strings.Contains(out.String(), "disagree") || !strings.Contains(out.String(), "engine exit code: 100") {
+		t.Fatalf("report must say the exit code and report disagree:\n%s", out.String())
+	}
+
+	crashed := &GdUnitResult{Parsed: true, ExitCode: 139, Suites: clean}
+	if v := crashed.Verdict(); v.Passed() || !strings.Contains(v.Reasons[0], "exited with code 139") {
+		t.Fatalf("an abnormal engine exit must fail, got %q", v.Reasons)
+	}
+	warned := &GdUnitResult{Parsed: true, ExitCode: gdUnitExitWarning, Suites: clean}
+	if !warned.Verdict().Passed() {
+		t.Fatal("gdUnit4 exit 101 (orphan warning) must not fail a clean report")
+	}
+}
+
+func TestVerdictHintsStaleClassCache(t *testing.T) {
+	raw := strings.Join([]string{
+		`SCRIPT ERROR: Parse Error: Identifier "WorldCommands" not declared in the current scope.`,
+		"          at: GDScript::reload (res://tests/unit/world/test_commands.gd:12)",
+		"",
+	}, "\n")
+	hinted := &GdUnitResult{ValidationReason: "results.xml reported zero tests", RawOutput: raw}
+	if !hinted.Verdict().StaleClassCacheHint {
+		t.Fatal("unresolved identifier in a res://tests/ script must raise the stale class cache hint")
+	}
+	var out bytes.Buffer
+	RenderASCII(&out, &TestReport{GdUnit: hinted}, false)
+	if !strings.Contains(out.String(), "gdbg reimport") {
+		t.Fatalf("hint line missing:\n%s", out.String())
+	}
+	elsewhere := &GdUnitResult{RawOutput: strings.ReplaceAll(raw, "res://tests/", "res://scripts/")}
+	if elsewhere.Verdict().StaleClassCacheHint {
+		t.Fatal("errors outside res://tests/ must not raise the hint")
+	}
+}

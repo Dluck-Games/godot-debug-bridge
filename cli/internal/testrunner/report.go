@@ -15,11 +15,8 @@ type TestReport struct {
 
 func (r *TestReport) TotalTests() int {
 	total := 0
-	if r.GdUnit != nil && r.GdUnit.Parsed {
-		total += r.GdUnit.Suites.Tests
-	}
 	if r.GdUnit != nil {
-		total += len(r.GdUnit.LoadFailures)
+		total += r.GdUnit.Verdict().Tests + len(r.GdUnit.LoadFailures)
 	}
 	total += len(r.Integration)
 	total += len(r.Playtest)
@@ -28,8 +25,9 @@ func (r *TestReport) TotalTests() int {
 
 func (r *TestReport) TotalPassed() int {
 	passed := 0
-	if r.GdUnit != nil && r.GdUnit.Parsed {
-		passed += r.GdUnit.Suites.Tests - r.GdUnit.Suites.Failures - r.GdUnit.Suites.Errors - r.GdUnit.Suites.Skipped
+	if r.GdUnit != nil {
+		v := r.GdUnit.Verdict()
+		passed += v.Tests - v.Failures - v.Errors - v.Skipped
 	}
 	for _, sc := range r.Integration {
 		if sc.Passed {
@@ -46,11 +44,9 @@ func (r *TestReport) TotalPassed() int {
 
 func (r *TestReport) TotalFailed() int {
 	failed := 0
-	if r.GdUnit != nil && r.GdUnit.Parsed {
-		failed += r.GdUnit.Suites.Failures + r.GdUnit.Suites.Errors
-	}
 	if r.GdUnit != nil {
-		failed += len(r.GdUnit.LoadFailures)
+		v := r.GdUnit.Verdict()
+		failed += v.Failures + v.Errors + len(r.GdUnit.LoadFailures)
 	}
 	for _, sc := range r.Integration {
 		if !sc.Passed {
@@ -66,28 +62,18 @@ func (r *TestReport) TotalFailed() int {
 }
 
 func (r *TestReport) TotalSkipped() int {
-	if r.GdUnit != nil && r.GdUnit.Parsed {
-		return r.GdUnit.Suites.Skipped
+	if r.GdUnit != nil {
+		return r.GdUnit.Verdict().Skipped
 	}
 	return 0
 }
 
 func (r *TestReport) AllPassed() bool {
-	if r.GdUnit != nil {
-		// A missing, malformed, or zero-test gdUnit report is never a pass,
-		// regardless of the engine exit code. Valid parsed reports still rely
-		// on their own failure/error counts, even if the engine exit differs.
-		if !r.GdUnit.Valid() {
-			return false
-		}
-		if r.GdUnit.Suites.Failures+r.GdUnit.Suites.Errors > 0 {
-			return false
-		}
-		// A suite that never loaded ran zero tests; its absence from the
-		// JUnit report must not read as a pass.
-		if len(r.GdUnit.LoadFailures) > 0 {
-			return false
-		}
+	// The unit tier has exactly one verdict; every failure mode (invalid
+	// report, unloadable scripts, failed or errored cases, engine exit code)
+	// is a reason on it.
+	if r.GdUnit != nil && !r.GdUnit.Verdict().Passed() {
+		return false
 	}
 	for _, sc := range r.Integration {
 		if !sc.Passed {
@@ -155,28 +141,8 @@ func renderSimplified(w io.Writer, report *TestReport) {
 	hasFailures := !report.AllPassed()
 
 	if hasFailures {
-		// Show failure details
-		if report.GdUnit != nil && report.GdUnit.Valid() {
-			var failures []string
-			for _, suite := range report.GdUnit.Suites.TestSuites {
-				for _, tc := range suite.Cases {
-					if tc.Failure != nil || tc.Error != nil {
-						failures = append(failures, fmt.Sprintf("  x %s.%s", suite.Name, tc.Name))
-					}
-				}
-			}
-			if len(failures) > 0 {
-				fmt.Fprintln(w)
-				fmt.Fprintln(w, "  Unit Failures:")
-				for _, f := range failures {
-					fmt.Fprintln(w, f)
-				}
-			}
-		} else if report.GdUnit != nil {
-			renderGdUnitProblem(w, report.GdUnit)
-		}
 		if report.GdUnit != nil {
-			renderGdUnitLoadFailures(w, report.GdUnit)
+			renderGdUnitVerdict(w, report.GdUnit)
 		}
 
 		// Integration failures
@@ -242,13 +208,13 @@ func renderVerbose(w io.Writer, report *TestReport) {
 		fmt.Fprintln(w)
 
 		if report.GdUnit.Valid() {
+			v := report.GdUnit.Verdict()
 			fmt.Fprintf(w, "  %-38s %5s %5s %5s %7s\n", "Suite", "Tests", "Pass", "Fail", "Time")
 			fmt.Fprintf(w, "  %-38s %5s %5s %5s %7s\n",
 				strings.Repeat("─", 38), strings.Repeat("─", 5),
 				strings.Repeat("─", 5), strings.Repeat("─", 5),
 				strings.Repeat("─", 7))
 
-			var failures []string
 			totalTime := 0.0
 
 			for _, suite := range report.GdUnit.Suites.TestSuites {
@@ -264,30 +230,15 @@ func renderVerbose(w io.Writer, report *TestReport) {
 				fmt.Fprintf(w, "  %-38s %5d %5d %5d %6.1fs %s\n",
 					name, suite.Tests, pass, suite.Failures+suite.Errors, suite.Time, mark)
 				totalTime += suite.Time
-
-				for _, tc := range suite.Cases {
-					if tc.Failure != nil || tc.Error != nil {
-						failures = append(failures, fmt.Sprintf("    x %s.%s", suite.Name, tc.Name))
-					}
-				}
 			}
 
-			gdPass := report.GdUnit.Suites.Tests - report.GdUnit.Suites.Failures - report.GdUnit.Suites.Errors - report.GdUnit.Suites.Skipped
 			fmt.Fprintf(w, "\n  Subtotal: %-5d Passed: %-5d Failed: %-5d Skipped: %-5d\n",
-				report.GdUnit.Suites.Tests, gdPass, report.GdUnit.Suites.Failures+report.GdUnit.Suites.Errors, report.GdUnit.Suites.Skipped)
+				v.Tests, v.Tests-v.Failures-v.Errors-v.Skipped, v.Failures+v.Errors, v.Skipped)
 			fmt.Fprintf(w, "  Duration: %.1fs\n", totalTime)
-
-			if len(failures) > 0 {
-				fmt.Fprintln(w)
-				fmt.Fprintln(w, "  Failures:")
-				for _, f := range failures {
-					fmt.Fprintln(w, f)
-				}
-			}
-		} else {
-			renderGdUnitProblem(w, report.GdUnit)
 		}
-		renderGdUnitLoadFailures(w, report.GdUnit)
+		if !report.GdUnit.Verdict().Passed() {
+			renderGdUnitVerdict(w, report.GdUnit)
+		}
 	}
 
 	// Integration section
@@ -353,42 +304,59 @@ func renderVerbose(w io.Writer, report *TestReport) {
 	fmt.Fprintln(w, bar)
 }
 
-// renderGdUnitProblem explains why a gdUnit result is not trustworthy
-// (missing/malformed/zero-test report) and points at the persisted evidence.
-// Diagnostics are written to w so report modes never lose them to os.Stderr.
-func renderGdUnitProblem(w io.Writer, g *GdUnitResult) {
+// renderGdUnitVerdict is the one "why it failed" section for the unit tier:
+// every reason from the verdict, each failed or errored case with its message,
+// every script that failed to load, and the persisted raw output.
+func renderGdUnitVerdict(w io.Writer, g *GdUnitResult) {
+	v := g.Verdict()
 	fmt.Fprintln(w)
-	reason := g.ValidationReason
-	if reason == "" {
-		reason = "no trustworthy JUnit report was produced"
+	fmt.Fprintln(w, "  Unit tier failed:")
+	for _, reason := range v.Reasons {
+		fmt.Fprintf(w, "  - %s\n", reason)
 	}
-	fmt.Fprintf(w, "  gdUnit result invalid: %s\n", reason)
+	if v.StaleClassCacheHint {
+		fmt.Fprintln(w, "  Hint: test scripts reference identifiers or types Godot could not resolve; the class cache may be stale, run `gdbg reimport`.")
+	}
+	if len(v.Cases) > 0 {
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "  Unit failures:")
+		for _, c := range v.Cases {
+			fmt.Fprintf(w, "  x %s.%s\n", c.Suite, c.Case)
+			for _, line := range caseMessageLines(c) {
+				fmt.Fprintf(w, "      %s\n", line)
+			}
+		}
+	}
+	if len(g.LoadFailures) > 0 {
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "  Unit suites that failed to load:")
+		for _, f := range g.LoadFailures {
+			fmt.Fprintf(w, "  x %s (%s)\n", f.Path, f.Reason)
+			for _, e := range f.Errors {
+				fmt.Fprintf(w, "      %s\n", e)
+			}
+		}
+	}
+	fmt.Fprintln(w)
 	fmt.Fprintf(w, "  engine exit code: %d\n", g.ExitCode)
 	if g.RawLogPath != "" {
 		fmt.Fprintf(w, "  raw output: %s\n", g.RawLogPath)
 	}
-	if g.RawOutput != "" {
+	if !g.Valid() && g.RawOutput != "" {
 		dumpRawOutputTail(w, g.RawOutput)
 	}
 }
 
-// renderGdUnitLoadFailures names every unit script that failed to parse or
-// compile, with the engine errors Godot attributed to it.
-func renderGdUnitLoadFailures(w io.Writer, g *GdUnitResult) {
-	if len(g.LoadFailures) == 0 {
-		return
-	}
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "  Unit suites that failed to load:")
-	for _, f := range g.LoadFailures {
-		fmt.Fprintf(w, "  x %s (%s)\n", f.Path, f.Reason)
-		for _, e := range f.Errors {
-			fmt.Fprintf(w, "      %s\n", e)
+// caseMessageLines is the JUnit message attribute followed by the element
+// body, one rendered line each, blank lines dropped.
+func caseMessageLines(c GdUnitCaseFailure) []string {
+	var lines []string
+	for _, line := range strings.Split(c.Message+"\n"+c.Body, "\n") {
+		if line = strings.TrimRight(line, " \t\r"); line != "" {
+			lines = append(lines, line)
 		}
 	}
-	if g.RawLogPath != "" {
-		fmt.Fprintf(w, "  raw output: %s\n", g.RawLogPath)
-	}
+	return lines
 }
 
 // dumpRawOutputTail prints the last ~30 lines of raw gdunit4 output to w for

@@ -87,7 +87,124 @@ type GdUnitLoadFailure struct {
 // A missing/malformed report or a parsed report that declares zero tests is
 // never valid, regardless of the engine exit code.
 func (r *GdUnitResult) Valid() bool {
-	return r != nil && r.Parsed && r.ValidationReason == "" && r.Suites.Tests > 0
+	return r != nil && r.Parsed && r.ValidationReason == "" && junitCounts(&r.Suites).Tests > 0
+}
+
+// GdUnitCaseFailure is one failed or errored test case together with the
+// message gdUnit4 wrote for it, so the reader knows where to fix.
+type GdUnitCaseFailure struct {
+	Suite   string
+	Case    string
+	Kind    string // "failure" (assertion) or "error" (runtime error)
+	Message string // <failure message> / <error message>
+	Body    string // element text, e.g. the assertion detail or the Godot error
+}
+
+// GdUnitCounts are the JUnit totals aggregated from every <testsuite> element
+// and its <testcase> children. gdUnit4 writes `errors` only on <testsuite>,
+// never on the root <testsuites>, so every count takes the largest of the
+// root attribute, the summed suite attributes and the counted case markers;
+// no single omission can hide a failure.
+type GdUnitCounts struct {
+	Tests, Failures, Errors, Skipped int
+	Cases                            []GdUnitCaseFailure
+}
+
+func junitCounts(s *JUnitTestSuites) GdUnitCounts {
+	var sumTests, sumFailures, sumErrors, sumSkipped, caseFailures, caseErrors int
+	var cases []GdUnitCaseFailure
+	for _, suite := range s.TestSuites {
+		sumTests += suite.Tests
+		sumFailures += suite.Failures
+		sumErrors += suite.Errors
+		sumSkipped += suite.Skipped
+		for _, tc := range suite.Cases {
+			switch {
+			case tc.Error != nil:
+				caseErrors++
+				cases = append(cases, GdUnitCaseFailure{suite.Name, tc.Name, "error", tc.Error.Message, strings.TrimSpace(tc.Error.Body)})
+			case tc.Failure != nil:
+				caseFailures++
+				cases = append(cases, GdUnitCaseFailure{suite.Name, tc.Name, "failure", tc.Failure.Message, strings.TrimSpace(tc.Failure.Body)})
+			}
+		}
+	}
+	return GdUnitCounts{
+		Tests:    max(s.Tests, sumTests),
+		Failures: max(s.Failures, sumFailures, caseFailures),
+		Errors:   max(s.Errors, sumErrors, caseErrors),
+		Skipped:  max(s.Skipped, sumSkipped),
+		Cases:    cases,
+	}
+}
+
+// gdUnit4 exit codes (GdUnitTestSessionRunner.gd RETURN_* constants). 100 is
+// the only code that reports test failures; 101 warns about orphan nodes and
+// is not a failure; 103/104 are engine-side refusals to run at all.
+const (
+	gdUnitExitSuccess             = 0
+	gdUnitExitFailures            = 100
+	gdUnitExitWarning             = 101
+	gdUnitExitHeadlessUnsupported = 103
+	gdUnitExitGodotUnsupported    = 104
+)
+
+// GdUnitVerdict is the single pass/fail decision for the unit tier. Every
+// failure mode (untrustworthy report, unloadable scripts, failed or errored
+// cases, engine exit code) contributes one reason; an empty Reasons is a pass.
+type GdUnitVerdict struct {
+	GdUnitCounts
+	Reasons []string
+	// StaleClassCacheHint is set when scripts under res://tests/ hit unresolved
+	// identifiers or types, which a stale class cache typically causes.
+	StaleClassCacheHint bool
+}
+
+func (v GdUnitVerdict) Passed() bool { return len(v.Reasons) == 0 }
+
+// Verdict decides pass/fail for the unit tier from the parsed report, the
+// recovered load failures and the gdUnit4 exit code.
+func (r *GdUnitResult) Verdict() GdUnitVerdict {
+	v := GdUnitVerdict{GdUnitCounts: junitCounts(&r.Suites)}
+	if !r.Valid() {
+		reason := r.ValidationReason
+		if reason == "" {
+			reason = "no trustworthy JUnit report was produced"
+		}
+		v.Reasons = append(v.Reasons, "gdUnit result invalid: "+reason)
+	}
+	if n := len(r.LoadFailures); n > 0 {
+		v.Reasons = append(v.Reasons, fmt.Sprintf("%d unit script(s) failed to load (parse or compile error)", n))
+	}
+	if v.Failures+v.Errors > 0 {
+		v.Reasons = append(v.Reasons, fmt.Sprintf("%d failed and %d errored test case(s)", v.Failures, v.Errors))
+	}
+	if reason := gdUnitExitReason(r.ExitCode, v.Failures+v.Errors > 0); reason != "" {
+		v.Reasons = append(v.Reasons, reason)
+	}
+	v.StaleClassCacheHint = hasStaleClassCacheErrors(r.RawOutput)
+	return v
+}
+
+// gdUnitExitReason explains a gdUnit4 exit code that the parsed report does
+// not already account for. A failure code with zero counted failures means the
+// report and the exit code disagree, which is itself a failure.
+func gdUnitExitReason(code int, countedFailures bool) string {
+	switch code {
+	case gdUnitExitSuccess, gdUnitExitWarning:
+		return ""
+	case gdUnitExitFailures:
+		if countedFailures {
+			return ""
+		}
+		return "gdUnit4 exited with code 100 (test failures or errors) but results.xml counts none: the report and the exit code disagree"
+	case gdUnitExitHeadlessUnsupported:
+		return "gdUnit4 exited with code 103: headless mode is not supported by this gdUnit4 version"
+	case gdUnitExitGodotUnsupported:
+		return "gdUnit4 exited with code 104: this Godot version is not supported by gdUnit4"
+	default:
+		return fmt.Sprintf("the Godot engine exited with code %d before gdUnit4 could finish", code)
+	}
 }
 
 // rawOutputLogName is the generic file name used to persist the complete
@@ -167,7 +284,7 @@ func finalizeGdUnitResult(reportsDir string, exitCode int, raw []byte) (*GdUnitR
 
 	result.Suites = *suites
 	result.Parsed = true
-	if suites.Tests <= 0 {
+	if junitCounts(suites).Tests <= 0 {
 		result.ValidationReason = "results.xml reported zero tests"
 	}
 
@@ -209,6 +326,33 @@ func parseScriptLoadFailures(raw string) []GdUnitLoadFailure {
 		failures = append(failures, GdUnitLoadFailure{Path: m[1], Reason: m[2], Errors: errorsByPath[m[1]]})
 	}
 	return failures
+}
+
+// staleClassCacheMarkers are the Godot parse errors raised when a class_name
+// is missing from the class cache, typically after adding or renaming scripts
+// without an import.
+var staleClassCacheMarkers = []string{"not declared in the current scope", "Could not find type"}
+
+// hasStaleClassCacheErrors reports whether the engine output attributes an
+// unresolved identifier or type to a script under res://tests/.
+func hasStaleClassCacheErrors(raw string) bool {
+	lines := strings.Split(raw, "\n")
+	for i := 0; i+1 < len(lines); i++ {
+		marked := false
+		for _, marker := range staleClassCacheMarkers {
+			if strings.Contains(lines[i], marker) {
+				marked = true
+				break
+			}
+		}
+		if !marked {
+			continue
+		}
+		if m := scriptErrorAtRe.FindStringSubmatch(lines[i+1]); m != nil && strings.HasPrefix(m[1], TestsDirRes) {
+			return true
+		}
+	}
+	return false
 }
 
 func buildGdUnitArgs(projectDir string, opts RunOptions, reportsArg string) []string {

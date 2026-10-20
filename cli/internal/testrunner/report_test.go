@@ -6,11 +6,11 @@ import (
 	"testing"
 )
 
-func TestAllPassedTrustsParsedGdUnitReportOverExitCode(t *testing.T) {
+func TestAllPassedAcceptsGdUnitWarningExitCode(t *testing.T) {
 	report := &TestReport{
 		GdUnit: &GdUnitResult{
 			Parsed:   true,
-			ExitCode: 1,
+			ExitCode: gdUnitExitWarning,
 			Suites: JUnitTestSuites{
 				Tests:    3,
 				Failures: 0,
@@ -20,7 +20,7 @@ func TestAllPassedTrustsParsedGdUnitReportOverExitCode(t *testing.T) {
 	}
 
 	if !report.AllPassed() {
-		t.Fatal("expected parsed gdUnit report with no failures or errors to pass")
+		t.Fatal("expected parsed gdUnit report with no failures or errors to pass on the orphan warning exit code")
 	}
 }
 
