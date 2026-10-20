@@ -257,7 +257,9 @@ Project settings (registered by the plugin with defaults; override as needed):
 ## State layout
 
 `DebugBridgeState` resolves the state root in order: injected `env_var` (absolute
-root), then `$XDG_STATE_HOME/<app_name>`, then `~/.local/state/<app_name>`.
+root), then `$XDG_STATE_HOME/<app_name>`, then `~/.local/state/<app_name>`. It is
+resolved once per process, so a game script that changes the environment at
+runtime does not move the IPC directory away from the launching CLI.
 
 ```
 <state_root>/debug/ipc/command

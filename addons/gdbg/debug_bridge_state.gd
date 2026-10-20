@@ -4,6 +4,9 @@ extends RefCounted
 ## Shared state-root resolver. The configured environment variable wins, then
 ## $XDG_STATE_HOME/app_name, then ~/.local/state/app_name. IPC and artifacts
 ## always use absolute paths. Projects may override the two gdbg/state settings.
+## The root is resolved once per process: the launching CLI injects it, and a
+## later runtime change to the environment must not move the IPC directory the
+## CLI is already talking to.
 
 const DEBUG_SUBDIR := "debug"
 const IPC_SUBDIR := "ipc"
@@ -11,6 +14,7 @@ const SCREENSHOTS_SUBDIR := "screenshots"
 
 static var _env_var: String = ""
 static var _app_name: String = ""
+static var _state_root: String = ""
 
 
 static func _setting_env_var() -> String:
@@ -27,6 +31,12 @@ static func _setting_app_name() -> String:
 
 ## Absolute GDBG state root.
 static func state_root() -> String:
+	if _state_root.is_empty():
+		_state_root = _resolve_state_root()
+	return _state_root
+
+
+static func _resolve_state_root() -> String:
 	var injected := OS.get_environment(_setting_env_var())
 	if not injected.is_empty():
 		return _strip_trailing_slash(injected)

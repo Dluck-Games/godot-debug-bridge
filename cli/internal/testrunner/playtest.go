@@ -102,14 +102,6 @@ func runOnePlaytest(godotBin, projectDir, name string, opts RunOptions) (Playtes
 	if err := os.MkdirAll(frameDir, 0o755); err != nil {
 		return PlaytestResult{}, fmt.Errorf("create playtest output: %w", err)
 	}
-	// The game's AIDebugBridge starts as an autoload. Give each playtest process
-	// its own state root before launch so it cannot consume command files queued
-	// by an interactive debug session sharing the normal GDBG_STATE.
-	playtestStateRoot := filepath.Join(outputDir, "state")
-	if err := os.MkdirAll(playtestStateRoot, 0o755); err != nil {
-		return PlaytestResult{}, fmt.Errorf("create isolated playtest state: %w", err)
-	}
-
 	logPath := filepath.Join(outputDir, "godot.log")
 	logFile, err := os.Create(logPath)
 	if err != nil {
@@ -121,7 +113,9 @@ func runOnePlaytest(godotBin, projectDir, name string, opts RunOptions) (Playtes
 
 	cmd := exec.Command(godotBin, args...)
 	cmd.Dir = projectDir
-	cmd.Env = isolatedPlaytestEnv(playtestStateRoot)
+	// Inject the same state root `gdbg run game` uses, so `gdbg debug` and
+	// `gdbg console` reach a running playtest exactly as they reach a normal run.
+	cmd.Env = append(os.Environ(), "GDBG_STATE="+debug.StateBase())
 	applyPlaytestDisplayAttr(cmd, opts)
 	var output bytes.Buffer
 	var writer io.Writer = io.MultiWriter(logFile, &output)
@@ -284,16 +278,6 @@ func tailPlaytestTimeline(path string, w io.Writer, stop <-chan struct{}) {
 			drain(false)
 		}
 	}
-}
-
-func isolatedPlaytestEnv(stateRoot string) []string {
-	env := make([]string, 0, len(os.Environ())+1)
-	for _, entry := range os.Environ() {
-		if !strings.HasPrefix(entry, "GDBG_STATE=") {
-			env = append(env, entry)
-		}
-	}
-	return append(env, "GDBG_STATE="+stateRoot)
 }
 
 func discoverPlaytests(projectDir, dir string, suiteFilter []string) ([]string, error) {
