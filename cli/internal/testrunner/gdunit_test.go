@@ -190,3 +190,63 @@ func assertArgSequence(t *testing.T, args []string, want []string) {
 	}
 	t.Fatalf("args %v do not contain sequence %v", args, want)
 }
+
+func TestFinalizeGdUnitResultRecordsScriptLoadFailures(t *testing.T) {
+	dir := t.TempDir()
+	writeGdUnitTestFile(t, filepath.Join(dir, "results.xml"),
+		`<testsuites tests="1" failures="0" errors="0" skipped="0"><testsuite name="test_good" tests="1"/></testsuites>`)
+	raw := []byte(strings.Join([]string{
+		"Scanning for test suites in: res://tests/unit/",
+		`SCRIPT ERROR: Parse Error: Identifier "nope" not declared in the current scope.`,
+		"          at: GDScript::reload (res://tests/unit/broken/test_broken.gd:5)",
+		"          GDScript backtrace (most recent call first):",
+		`ERROR: Failed to load script "res://tests/unit/broken/test_broken.gd" with error "Parse error".`,
+		"   at: load (modules/gdscript/gdscript_resource_format.cpp:46)",
+		`ERROR: Failed to load script "res://tests/unit/broken/test_broken.gd" with error "Parse error".`,
+		`ERROR: Failed to load script "res://scripts/helper.gd" with error "Parse error".`,
+		"SCRIPT ERROR: Compile Error: Failed to compile depended scripts.",
+		"          at: GDScript::reload (res://tests/unit/dep/test_dep.gd:0)",
+		`ERROR: Failed to load script "res://tests/unit/dep/test_dep.gd" with error "Compilation failed".`,
+		"",
+	}, "\n"))
+
+	result, err := finalizeGdUnitResult(dir, 0, raw)
+	if err != nil {
+		t.Fatalf("finalizeGdUnitResult() error = %v", err)
+	}
+	if !result.Valid() {
+		t.Fatal("a parsed report with tests must stay valid; load failures are reported separately")
+	}
+	if len(result.LoadFailures) != 2 {
+		t.Fatalf("LoadFailures = %+v, want the two unit scripts once each", result.LoadFailures)
+	}
+	broken := result.LoadFailures[0]
+	if broken.Path != "res://tests/unit/broken/test_broken.gd" || broken.Reason != "Parse error" {
+		t.Fatalf("first load failure = %+v", broken)
+	}
+	if len(broken.Errors) != 1 || !strings.Contains(broken.Errors[0], `Identifier "nope"`) || !strings.HasSuffix(broken.Errors[0], "(line 5)") {
+		t.Fatalf("broken.Errors = %q, want the attributed parse error with its line", broken.Errors)
+	}
+	dep := result.LoadFailures[1]
+	if dep.Path != "res://tests/unit/dep/test_dep.gd" || dep.Reason != "Compilation failed" || len(dep.Errors) != 1 {
+		t.Fatalf("second load failure = %+v", dep)
+	}
+
+	report := &TestReport{GdUnit: result}
+	if report.AllPassed() {
+		t.Fatal("unloadable unit scripts must fail the run")
+	}
+	if got := report.TotalFailed(); got != 2 {
+		t.Fatalf("TotalFailed() = %d, want 2", got)
+	}
+	if got := report.TotalTests(); got != 3 {
+		t.Fatalf("TotalTests() = %d, want 3", got)
+	}
+	var out bytes.Buffer
+	RenderASCII(&out, report, false)
+	for _, want := range []string{"failed to load", "res://tests/unit/broken/test_broken.gd (Parse error)", `Identifier "nope"`, "SOME TESTS FAILED"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("report output missing %q:\n%s", want, out.String())
+		}
+	}
+}

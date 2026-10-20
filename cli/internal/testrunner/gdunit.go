@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/Dluck-Games/godot-debug-bridge/cli/internal/debug"
 )
@@ -66,6 +68,19 @@ type GdUnitResult struct {
 	// results.xml, malformed/unreadable XML, or a parsed report with zero
 	// tests). It carries the explicit reason the unit tier cannot be trusted.
 	ValidationReason string
+
+	// LoadFailures lists unit scripts Godot could not parse or compile. gdUnit4
+	// skips such scripts silently and its JUnit report never mentions them, so
+	// they are recovered from the engine output and each counts as a failure.
+	LoadFailures []GdUnitLoadFailure
+}
+
+// GdUnitLoadFailure is one unit script that failed to load before any of its
+// tests could run.
+type GdUnitLoadFailure struct {
+	Path   string   // res:// path of the script
+	Reason string   // Godot's load error, e.g. "Parse error"
+	Errors []string // SCRIPT ERROR messages Godot attributed to Path
 }
 
 // Valid reports whether the gdUnit result is a trustworthy parsed JUnit report.
@@ -130,9 +145,10 @@ func finalizeGdUnitResult(reportsDir string, exitCode int, raw []byte) (*GdUnitR
 	}
 
 	result := &GdUnitResult{
-		ExitCode:   exitCode,
-		RawOutput:  string(raw),
-		RawLogPath: rawLogPath,
+		ExitCode:     exitCode,
+		RawOutput:    string(raw),
+		RawLogPath:   rawLogPath,
+		LoadFailures: parseScriptLoadFailures(string(raw)),
 	}
 
 	// Find and parse results.xml. Missing or malformed reports are explicit
@@ -160,6 +176,39 @@ func finalizeGdUnitResult(reportsDir string, exitCode int, raw []byte) (*GdUnitR
 
 func logStateBase() string {
 	return filepath.Join(debug.StateBase(), "logs")
+}
+
+var (
+	scriptLoadFailureRe = regexp.MustCompile(`Failed to load script "(res://[^"]+)" with error "([^"]*)"`)
+	scriptErrorAtRe     = regexp.MustCompile(`^\s*at: \S+ \((res://[^:)]+):(\d+)\)`)
+)
+
+// parseScriptLoadFailures recovers unit scripts under UnitTestsDirRes that
+// Godot reported as "Failed to load script" while gdUnit4 scanned them. The
+// SCRIPT ERROR lines Godot prints just before are attached by their "at:"
+// location so the report names the parse/compile error, not only the file.
+func parseScriptLoadFailures(raw string) []GdUnitLoadFailure {
+	lines := strings.Split(raw, "\n")
+	errorsByPath := map[string][]string{}
+	seen := map[string]bool{}
+	var failures []GdUnitLoadFailure
+	for i, line := range lines {
+		msg := strings.TrimSpace(line)
+		if strings.HasPrefix(msg, "SCRIPT ERROR: ") && i+1 < len(lines) {
+			if m := scriptErrorAtRe.FindStringSubmatch(lines[i+1]); m != nil {
+				errorsByPath[m[1]] = append(errorsByPath[m[1]],
+					fmt.Sprintf("%s (line %s)", strings.TrimPrefix(msg, "SCRIPT ERROR: "), m[2]))
+			}
+			continue
+		}
+		m := scriptLoadFailureRe.FindStringSubmatch(line)
+		if m == nil || !strings.HasPrefix(m[1], UnitTestsDirRes) || seen[m[1]] {
+			continue
+		}
+		seen[m[1]] = true
+		failures = append(failures, GdUnitLoadFailure{Path: m[1], Reason: m[2], Errors: errorsByPath[m[1]]})
+	}
+	return failures
 }
 
 func buildGdUnitArgs(opts RunOptions, reportsArg string) []string {

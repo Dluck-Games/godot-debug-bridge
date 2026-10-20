@@ -18,6 +18,9 @@ func (r *TestReport) TotalTests() int {
 	if r.GdUnit != nil && r.GdUnit.Parsed {
 		total += r.GdUnit.Suites.Tests
 	}
+	if r.GdUnit != nil {
+		total += len(r.GdUnit.LoadFailures)
+	}
 	total += len(r.Integration)
 	total += len(r.Playtest)
 	return total
@@ -45,6 +48,9 @@ func (r *TestReport) TotalFailed() int {
 	failed := 0
 	if r.GdUnit != nil && r.GdUnit.Parsed {
 		failed += r.GdUnit.Suites.Failures + r.GdUnit.Suites.Errors
+	}
+	if r.GdUnit != nil {
+		failed += len(r.GdUnit.LoadFailures)
 	}
 	for _, sc := range r.Integration {
 		if !sc.Passed {
@@ -75,6 +81,11 @@ func (r *TestReport) AllPassed() bool {
 			return false
 		}
 		if r.GdUnit.Suites.Failures+r.GdUnit.Suites.Errors > 0 {
+			return false
+		}
+		// A suite that never loaded ran zero tests; its absence from the
+		// JUnit report must not read as a pass.
+		if len(r.GdUnit.LoadFailures) > 0 {
 			return false
 		}
 	}
@@ -163,6 +174,9 @@ func renderSimplified(w io.Writer, report *TestReport) {
 			}
 		} else if report.GdUnit != nil {
 			renderGdUnitProblem(w, report.GdUnit)
+		}
+		if report.GdUnit != nil {
+			renderGdUnitLoadFailures(w, report.GdUnit)
 		}
 
 		// Integration failures
@@ -273,6 +287,7 @@ func renderVerbose(w io.Writer, report *TestReport) {
 		} else {
 			renderGdUnitProblem(w, report.GdUnit)
 		}
+		renderGdUnitLoadFailures(w, report.GdUnit)
 	}
 
 	// Integration section
@@ -354,6 +369,25 @@ func renderGdUnitProblem(w io.Writer, g *GdUnitResult) {
 	}
 	if g.RawOutput != "" {
 		dumpRawOutputTail(w, g.RawOutput)
+	}
+}
+
+// renderGdUnitLoadFailures names every unit script that failed to parse or
+// compile, with the engine errors Godot attributed to it.
+func renderGdUnitLoadFailures(w io.Writer, g *GdUnitResult) {
+	if len(g.LoadFailures) == 0 {
+		return
+	}
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "  Unit suites that failed to load:")
+	for _, f := range g.LoadFailures {
+		fmt.Fprintf(w, "  x %s (%s)\n", f.Path, f.Reason)
+		for _, e := range f.Errors {
+			fmt.Fprintf(w, "      %s\n", e)
+		}
+	}
+	if g.RawLogPath != "" {
+		fmt.Fprintf(w, "  raw output: %s\n", g.RawLogPath)
 	}
 }
 
