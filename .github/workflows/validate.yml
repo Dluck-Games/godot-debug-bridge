@@ -14,8 +14,8 @@ jobs:
     name: CLI tests and release packages
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: cli/go.mod
           cache-dependency-path: cli/go.sum
@@ -24,7 +24,7 @@ jobs:
       - name: Build macOS, Windows, and Linux packages
         run: scripts/package.sh 0.1.2-dev "${GITHUB_SHA::12}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
       - name: Upload installable packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: gdbg-packages-${{ github.sha }}
           path: dist/*
@@ -40,14 +40,14 @@ jobs:
     env:
       GODOT_VERSION: ${{ matrix.godot-version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: cli/go.mod
           cache-dependency-path: cli/go.sum
       - name: Cache Godot
         id: cache-godot
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/godot
           key: godot-${{ env.GODOT_VERSION }}-linux-x86_64
