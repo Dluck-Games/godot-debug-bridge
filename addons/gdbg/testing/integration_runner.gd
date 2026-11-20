@@ -63,15 +63,14 @@ func _ready() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	var world: Variant = _host.integration_world()
-	var test_result: Variant = null
-	if _suite.has_method("test_run"):
-		test_result = await _suite.test_run(world)
-	if test_result == null:
+	if not _suite.has_method("test_run"):
 		print("[integration] No test_run defined, scenario loaded successfully")
 		if not _no_exit:
 			await _host.integration_quit(0)
 		return
+
+	var world: Variant = _host.integration_world()
+	var test_result: Variant = await _suite.test_run(world)
 	if test_result is DebugBridgeTestResult:
 		var result := test_result as DebugBridgeTestResult
 		result.print_report()
@@ -79,9 +78,20 @@ func _ready() -> void:
 			await _host.integration_quit(result.exit_code())
 		return
 
-	print("[integration] test_run returned a non-DebugBridgeTestResult value")
-	if not _no_exit:
-		await _host.integration_quit(0)
+	if test_result == null and _test_run_is_void():
+		if not _no_exit:
+			await _host.integration_quit(0)
+		return
+
+	await _fail("test_run must return DebugBridgeTestResult or declare a void return: %s" % suite_path)
+
+
+func _test_run_is_void() -> bool:
+	for method: Dictionary in _suite.get_method_list():
+		if method.name == &"test_run":
+			var return_type: Dictionary = method["return"]
+			return return_type.type == TYPE_NIL and (int(return_type.usage) & PROPERTY_USAGE_NIL_IS_VARIANT) == 0
+	return false
 
 
 func _exit_tree() -> void:

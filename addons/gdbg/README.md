@@ -136,10 +136,13 @@ godot --headless --fixed-fps 60 --path . \
 ```
 
 It parses `--integration` and `--no-exit`, validates the loaded script implements
-the `DebugBridgeAutomationTestSuite` integration capability, awaits the host
-lifecycle and prints the `DebugBridgeTestResult`. Exit codes are preserved: `0` pass, `1` failure /
-error (missing argument, missing suite, invalid suite type, missing scenario or
-load failure). `--no-exit` keeps the process alive for editor-driven runs.
+the `DebugBridgeAutomationTestSuite` integration capability and awaits the host
+lifecycle. A suite can omit `test_run` to check that its scenario loads. A test
+method must return a `DebugBridgeTestResult` or declare `-> void`. The runner
+prints assertion results and exits with `0` for success or `1` for a failed
+assertion, invalid suite, invalid result, or load failure. The CLI also fails a
+suite if Godot reports a script error. `--no-exit` keeps the process alive for
+editor-driven runs.
 
 ### Playtest runtime
 

@@ -5,11 +5,16 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
+
+// Godot can log a GDScript error without returning a failing process status.
+var integrationScriptError = regexp.MustCompile(`(?m)^(?:\x1b\[[0-9;]*m)*SCRIPT ERROR:`)
 
 type IntegrationTestResult struct {
 	Name     string
@@ -38,22 +43,21 @@ func RunIntegrationTests(godotBin, projectDir string, opts RunOptions) ([]Integr
 		cmd.Dir = projectDir
 
 		var output bytes.Buffer
+		var log io.Writer = &output
 		if opts.Verbose {
-			cmd.Stdout = os.Stderr
-			cmd.Stderr = os.Stderr
-		} else {
-			cmd.Stdout = &output
-			cmd.Stderr = &output
+			log = io.MultiWriter(os.Stderr, log)
 		}
+		cmd.Stdout = log
+		cmd.Stderr = log
 
 		err := cmd.Run()
 		exitCode := 0
-		passed := true
-		if err != nil {
+		passed := err == nil && !integrationScriptError.Match(output.Bytes())
+		if !passed {
+			exitCode = 1
 			if exitErr, ok := err.(*exec.ExitError); ok {
 				exitCode = exitErr.ExitCode()
 			}
-			passed = false
 		}
 
 		if opts.Verbose {
