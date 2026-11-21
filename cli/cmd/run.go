@@ -20,6 +20,7 @@ import (
 var (
 	flagWindowed   bool
 	flagFullscreen bool
+	flagMute       bool
 	flagForce      bool
 	flagDetach     bool
 )
@@ -52,6 +53,9 @@ Display modes (mutually exclusive):
   --windowed    Windowed — launch with a GUI window
   --fullscreen  Fullscreen — launch in fullscreen mode
 
+Audio:
+  --mute        Launch with the Dummy audio driver (no sound); default is normal audio
+
 Detached mode:
   --detach      Launch in background, redirect output to log file, return immediately.
                 Designed for AI agents whose Bash tool blocks on streaming stdout.
@@ -71,6 +75,7 @@ var runEditorCmd = &cobra.Command{
 func init() {
 	runGameCmd.Flags().BoolVar(&flagWindowed, "windowed", false, "launch with GUI window instead of headless")
 	runGameCmd.Flags().BoolVar(&flagFullscreen, "fullscreen", false, "launch in fullscreen mode")
+	runGameCmd.Flags().BoolVar(&flagMute, "mute", false, "launch with the Dummy audio driver so the game makes no sound")
 	runGameCmd.Flags().BoolVar(&flagForce, "force", false, "skip duplicate-process check, allow multiple instances")
 	runGameCmd.Flags().BoolVar(&flagDetach, "detach", false, "launch in background, log to file only, return immediately (for AI agents)")
 	runGameCmd.MarkFlagsMutuallyExclusive("windowed", "fullscreen")
@@ -114,6 +119,9 @@ func runGame(cmd *cobra.Command, args []string) error {
 		godotArgs = append(godotArgs, "--windowed")
 	default:
 		godotArgs = append(godotArgs, "--headless")
+	}
+	if flagMute {
+		godotArgs = append(godotArgs, "--audio-driver", "Dummy")
 	}
 	godotArgs = append(godotArgs, "--path", projectDir)
 
@@ -217,6 +225,7 @@ func runGameDetached(godotBin string, godotArgs []string, projectDir string, bri
 	proc, err := godot.Launch(godotBin, godot.LaunchOpts{
 		ProjectDir:  projectDir,
 		DisplayMode: displayMode,
+		Mute:        flagMute,
 		Detach:      true,
 		ExtraArgs:   extractPassthroughArgs(godotArgs),
 		LogFile:     logFile,

@@ -104,6 +104,7 @@ const (
 type LaunchOpts struct {
 	ProjectDir  string
 	DisplayMode DisplayMode
+	Mute        bool // pass --audio-driver Dummy so the game makes no sound
 	Editor      bool
 	Detach      bool
 	ExtraArgs   []string
@@ -122,6 +123,9 @@ func Launch(godotBin string, opts LaunchOpts) (*exec.Cmd, error) {
 		args = append(args, "--fullscreen")
 	default:
 		args = append(args, "--headless")
+	}
+	if opts.Mute {
+		args = append(args, "--audio-driver", "Dummy")
 	}
 	if opts.Editor {
 		args = append(args, "--editor")

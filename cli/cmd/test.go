@@ -19,12 +19,13 @@ var (
 	flagRecord           bool
 	flagHeadless         bool
 	flagPlaytestWindowed bool
+	flagPlaytestMute     bool
 	flagSuite            string
 	flagPlaytestFrameDir string
 )
 
 var testCmd = &cobra.Command{
-	Use:   "test <tiers> --suite <suites> [--record] [--headless] [--windowed] [--verbose]",
+	Use:   "test <tiers> --suite <suites> [--record] [--headless] [--windowed] [--mute] [--verbose]",
 	Short: "Run test suites by tier",
 	Long: `Run gdUnit4 unit tests, IntegrationTestSuite integration tests, and automated playtests.
 
@@ -40,6 +41,8 @@ Before the unit and integration tiers launch Godot, the project is imported head
 
 Playtest display: default is background (window exists for recording, does not take focus).
 Use --headless for no window, or --windowed to watch in the foreground.
+
+Playtest audio: --mute launches Godot with the Dummy audio driver (no sound).
 
 Dependencies:
   unit requires the gdUnit4 addon (addons/gdUnit4/plugin.cfg and bin/GdUnitCmdTool.gd).
@@ -67,6 +70,7 @@ func init() {
 	testCmd.Flags().BoolVar(&flagRecord, "record", false, "record automated playtest video (only valid with playtest)")
 	testCmd.Flags().BoolVar(&flagHeadless, "headless", false, "run playtest with no window (only valid with playtest; incompatible with --record and --windowed)")
 	testCmd.Flags().BoolVar(&flagPlaytestWindowed, "windowed", false, "show the playtest window in the foreground (only valid with playtest; incompatible with --headless)")
+	testCmd.Flags().BoolVar(&flagPlaytestMute, "mute", false, "run playtest with the Dummy audio driver so it makes no sound (only valid with playtest)")
 	testCmd.Flags().StringVar(&flagSuite, "suite", "", "comma-separated suite names to run (e.g. gameplay,render,system,root), or 'all' for all discovered suites")
 	testCmd.Flags().StringVar(&flagPlaytestFrameDir, "playtest-frame-dir", "", "explicit directory for automated playtest frames")
 	testCmd.MarkFlagsMutuallyExclusive("headless", "windowed")
@@ -170,6 +174,9 @@ func resolveTestSelection(cmd *cobra.Command, args []string, projectDir string) 
 	if flagPlaytestWindowed && !hasPlaytest {
 		return nil, testrunner.RunOptions{}, fmt.Errorf("--windowed requires the playtest tier")
 	}
+	if flagPlaytestMute && !hasPlaytest {
+		return nil, testrunner.RunOptions{}, fmt.Errorf("--mute requires the playtest tier")
+	}
 	if flagHeadless && flagPlaytestWindowed {
 		return nil, testrunner.RunOptions{}, fmt.Errorf("--headless cannot be combined with --windowed")
 	}
@@ -185,6 +192,7 @@ func resolveTestSelection(cmd *cobra.Command, args []string, projectDir string) 
 		Verbose:          flagVerbose,
 		Headless:         flagHeadless,
 		Windowed:         flagPlaytestWindowed,
+		Mute:             flagPlaytestMute,
 		Suite:            suites,
 		PlaytestFrameDir: flagPlaytestFrameDir,
 	}, nil

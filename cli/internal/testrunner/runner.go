@@ -22,6 +22,7 @@ type RunOptions struct {
 	Verbose          bool
 	Headless         bool     // playtest: Godot --headless, no window
 	Windowed         bool     // playtest: foreground window (may take focus)
+	Mute             bool     // playtest: Godot --audio-driver Dummy, no sound
 	Suite            []string // empty = all suites (maps to CLI --suite all)
 	PlaytestFrameDir string   // optional explicit screenshot/recording frame directory
 }

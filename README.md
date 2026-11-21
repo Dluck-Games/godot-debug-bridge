@@ -110,6 +110,7 @@ gdbg --project-dir /path/to/game stop game
 
 # Screenshot and recording need a rendered viewport.
 gdbg --project-dir /path/to/game run game --windowed --detach
+# Add --mute to launch with the Dummy audio driver (no sound).
 gdbg --project-dir /path/to/game debug screenshot --width 1280
 ```
 

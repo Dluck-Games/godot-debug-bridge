@@ -193,14 +193,17 @@ func playtestGodotArgs(projectDir, name, outputDir, frameDir string, opts RunOpt
 	if opts.Headless {
 		display = "--headless"
 	}
-	args := []string{
-		display,
+	args := []string{display}
+	if opts.Mute {
+		args = append(args, "--audio-driver", "Dummy")
+	}
+	args = append(args,
 		"--path", projectDir,
 		"--",
-		"--playtest=" + name,
-		"--playtest-output-dir=" + outputDir,
-		"--playtest-frame-dir=" + frameDir,
-	}
+		"--playtest="+name,
+		"--playtest-output-dir="+outputDir,
+		"--playtest-frame-dir="+frameDir,
+	)
 	if !opts.Headless && !opts.Windowed {
 		args = append(args, "--playtest-background")
 	}
