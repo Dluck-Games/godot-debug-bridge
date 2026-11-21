@@ -1,9 +1,7 @@
 package debug
 
 import (
-	"math"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -64,37 +62,6 @@ func TestParseFlags_ScreenshotVariants(t *testing.T) {
 	}
 }
 
-func TestParseFlags_RecordFlags(t *testing.T) {
-	f, positional, err := ParseFlags([]string{"--seconds", "10", "--fps", "4", "--output", "/tmp/play.mp4", "--width", "1280"})
-	if err != nil {
-		t.Fatalf("ParseFlags: %v", err)
-	}
-	if f.Seconds != 10 || f.FPS != 4 || f.Output != "/tmp/play.mp4" || f.Width != 1280 {
-		t.Errorf("record flags wrong: %+v", f)
-	}
-	if len(positional) != 0 {
-		t.Errorf("positional = %v", positional)
-	}
-
-	// Invalid numerics stay NaN (rejected later by BuildRecordOpts).
-	f2, _, err := ParseFlags([]string{"--seconds", "abc", "--fps", "bad"})
-	if err != nil {
-		t.Fatalf("ParseFlags: %v", err)
-	}
-	if !math.IsNaN(f2.Seconds) || !math.IsNaN(f2.FPS) {
-		t.Errorf("expected NaN for invalid numerics: %+v", f2)
-	}
-
-	// Non-integer fps is preserved for the validator to reject.
-	f3, _, err := ParseFlags([]string{"--fps", "1.5"})
-	if err != nil {
-		t.Fatalf("ParseFlags: %v", err)
-	}
-	if f3.FPS != 1.5 {
-		t.Errorf("fps = %v, want 1.5", f3.FPS)
-	}
-}
-
 func TestParseFlags_InvalidDelayFallsBackZero(t *testing.T) {
 	f, _, err := ParseFlags([]string{"--delay", "abc"})
 	if err != nil {
@@ -112,19 +79,6 @@ func TestParseFlags_InvalidCountFallsBackOne(t *testing.T) {
 	}
 	if !f.HasCount || f.Count != 1 {
 		t.Errorf("count = %v (has=%v), want 1", f.Count, f.HasCount)
-	}
-}
-
-func TestParseFlags_OutputRequiresArgument(t *testing.T) {
-	for _, args := range [][]string{{"--output"}, {"--output", "--seconds", "5"}, {"record", "--output"}} {
-		_, _, err := ParseFlags(args)
-		if err == nil {
-			t.Errorf("expected error for args %v", args)
-			continue
-		}
-		if !strings.Contains(err.Error(), ".mp4 or .mov") {
-			t.Errorf("unexpected error for %v: %v", args, err)
-		}
 	}
 }
 

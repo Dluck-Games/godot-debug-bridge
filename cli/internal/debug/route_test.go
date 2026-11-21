@@ -20,17 +20,10 @@ func TestResolveCommandScreenshot(t *testing.T) {
 	}
 }
 
-func TestResolveCommandRecord(t *testing.T) {
-	f, _, err := ParseFlags([]string{"--seconds", "10", "--fps", "4", "--output", "/tmp/play.mov"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := ResolveCommand("record", nil, f)
-	if got.Type != RouteRecord || got.Options == nil || got.Options.Seconds != 10 || got.Options.FPS != 4 {
-		t.Fatalf("route = %#v", got)
-	}
-	if bad := ResolveCommand("record", []string{"extra"}, Flags{}); bad.Type != RouteError {
-		t.Fatalf("record positional route = %#v", bad)
+func TestResolveCommandRecordMigrated(t *testing.T) {
+	got := ResolveCommand("record", nil, Flags{})
+	if got.Type != RouteMigrate || !strings.Contains(got.Message, "gdbg record") {
+		t.Fatalf("route = %#v, want migration hint to gdbg record", got)
 	}
 }
 

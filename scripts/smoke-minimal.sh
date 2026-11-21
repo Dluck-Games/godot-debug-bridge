@@ -40,6 +40,12 @@ if headless_capture_output=$(PATH="$(dirname "$godot_bin"):$PATH" GDBG_STATE="$s
   exit 1
 fi
 grep -F "Screenshot capture requires a rendered display" <<<"$headless_capture_output"
+if legacy_record_output=$(PATH="$(dirname "$godot_bin"):$PATH" GDBG_STATE="$state_dir" \
+  "$cli_bin" --project-dir "$fixture_dir" debug record 2>&1); then
+  echo "removed debug record unexpectedly succeeded" >&2
+  exit 1
+fi
+grep -F "use 'gdbg record'" <<<"$legacy_record_output"
 PATH="$(dirname "$godot_bin"):$PATH" GDBG_STATE="$state_dir" \
   "$cli_bin" --project-dir "$fixture_dir" stop
 
@@ -47,5 +53,18 @@ PATH="$(dirname "$godot_bin"):$PATH" GDBG_STATE="$state_dir" \
   "$cli_bin" --project-dir "$fixture_dir" test integration --suite smoke
 PATH="$(dirname "$godot_bin"):$PATH" GDBG_STATE="$state_dir" \
   "$cli_bin" --project-dir "$fixture_dir" test playtest --suite smoke --headless
+
+if [[ "$(uname -s)" == "Darwin" || -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]]; then
+  PATH="$(dirname "$godot_bin"):$PATH" GDBG_STATE="$state_dir" \
+    "$cli_bin" --project-dir "$fixture_dir" record "$fixture_dir/tests/record_smoke.gd" \
+    --fps 30 \
+    --output "$state_dir/smoke_rec.mp4" \
+    --manifest "$state_dir/smoke_manifest.json" \
+    --contact-sheet "$state_dir/smoke_sheet.jpg"
+  test -s "$state_dir/smoke_rec.mp4"
+  test -s "$state_dir/smoke_sheet.jpg"
+  grep -F '"total_frames": 20' "$state_dir/smoke_manifest.json"
+  grep -F '"missing_draws": 0' "$state_dir/smoke_manifest.json"
+fi
 
 echo "GDBG minimal smoke passed"

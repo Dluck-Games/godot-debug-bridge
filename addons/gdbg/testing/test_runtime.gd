@@ -15,6 +15,7 @@ const RUNTIME_NODE_PATH := "/root/DebugBridgeTestRuntime"
 const DEFAULT_SUITE_PATTERN := "res://tests/playtest/playtest_%s.gd"
 const SUITE_PATTERN_SETTING := "gdbg/playtest/suite_pattern"
 const TEST_HOST_SCRIPT := preload("res://addons/gdbg/testing/test_host.gd")
+const RECORD_SESSION_SCRIPT := preload("res://addons/gdbg/recording/record_session.gd")
 
 var _launch_args: Dictionary = {}
 var _active_suite: DebugBridgePlaytestSuite = null
@@ -35,6 +36,10 @@ static func instance() -> Variant:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if RECORD_SESSION_SCRIPT.has_launch_args():
+		var session: Node = RECORD_SESSION_SCRIPT.new()
+		add_child(session)
+		return
 	_launch_args = _parse_launch_args()
 	var playtest_name := String(_launch_args.get("playtest", "")).strip_edges()
 	if playtest_name.is_empty():

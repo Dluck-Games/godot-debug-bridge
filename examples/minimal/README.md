@@ -15,6 +15,7 @@ gdbg console echo hello from GDBG
 gdbg --project-dir . stop game
 gdbg --project-dir . test integration --suite smoke
 gdbg --project-dir . test playtest --suite smoke --headless
+gdbg --project-dir . record tests/record_smoke.gd --fps 30 -o /tmp/minimal_smoke.mp4
 ```
 
 The `addon install` command copies the addon, enables the plugin, and runs a

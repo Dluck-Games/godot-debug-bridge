@@ -25,6 +25,10 @@ func _ready() -> void:
 			failures.append("unknown-command suggestion did not find ping")
 	if get_node_or_null("/root/AIDebugBridge") == null:
 		failures.append("AIDebugBridge autoload is missing")
+	if not ResourceLoader.exists("res://addons/gdbg/recording/record_session.gd"):
+		failures.append("DebugBridgeRecordSession script is missing")
+	elif DebugBridgeRecordSession.has_launch_args():
+		failures.append("DebugBridgeRecordSession should be inactive during normal smoke")
 	if DebugBridgeProtocol.VERSION != 1:
 		failures.append("unexpected protocol version")
 	if failures.is_empty():

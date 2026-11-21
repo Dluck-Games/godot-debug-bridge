@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Dluck-Games/godot-debug-bridge/cli/internal/debug"
+	"github.com/Dluck-Games/godot-debug-bridge/cli/internal/record"
 )
 
 const playtestFPS = 4
@@ -170,12 +171,16 @@ func runOnePlaytest(godotBin, projectDir, name string, opts RunOptions) (Playtes
 		ReportText: reportText,
 	}
 
-	if opts.Record && result.Passed {
+	if opts.Record {
 		recordingPath := filepath.Join(outputDir, "recording.mp4")
-		if err := encodePlaytestRecording(frameDir, recordingPath); err != nil {
-			return PlaytestResult{}, err
+		if encErr := encodePlaytestRecording(frameDir, recordingPath); encErr != nil {
+			if result.Passed {
+				return PlaytestResult{}, encErr
+			}
+			fmt.Fprintf(os.Stderr, "Warning: failed to encode failed playtest recording: %v\n", encErr)
+		} else {
+			result.RecordingPath = recordingPath
 		}
-		result.RecordingPath = recordingPath
 	}
 
 	return result, nil
@@ -493,7 +498,7 @@ func encodePlaytestRecording(frameDir, outputPath string) error {
 		return fmt.Errorf("no recorded playtest frames found in %s", frameDir)
 	}
 
-	if err := debug.EncodeFramesToVideo(framePaths, outputPath, playtestFPS); err != nil {
+	if err := record.EncodeFramesToVideo(framePaths, outputPath, playtestFPS); err != nil {
 		return fmt.Errorf("encode playtest recording: %w", err)
 	}
 	return nil

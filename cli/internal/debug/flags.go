@@ -20,9 +20,6 @@ type Flags struct {
 	Width    int
 	Height   int
 	Scale    float64
-	Seconds  float64
-	FPS      float64
-	Output   string
 
 	// ProjectDir is accepted for argument compatibility; the native bridge no
 	// longer needs the project directory (IPC lives under $GDBG_STATE).
@@ -34,8 +31,6 @@ type Flags struct {
 	HasWidth    bool
 	HasHeight   bool
 	HasScale    bool
-	HasSeconds  bool
-	HasFPS      bool
 }
 
 // ParseFlags splits args into flags and positional arguments. Numeric parsing
@@ -108,23 +103,6 @@ func ParseFlags(args []string) (Flags, []string, error) {
 			}
 			f.Scale = parsed
 			f.HasScale = true
-			advance()
-		case "--seconds":
-			v, _ := next()
-			f.Seconds = parseFloat(v)
-			f.HasSeconds = true
-			advance()
-		case "--fps":
-			v, _ := next()
-			f.FPS = parseFloat(v)
-			f.HasFPS = true
-			advance()
-		case "--output":
-			v, ok := next()
-			if !ok || v == "" || strings.HasPrefix(v, "-") {
-				return f, nil, fmt.Errorf("Flag --output requires a .mp4 or .mov path argument")
-			}
-			f.Output = v
 			advance()
 		case "--project-dir", "--path", "-p":
 			v, ok := next()

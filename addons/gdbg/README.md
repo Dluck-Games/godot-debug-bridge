@@ -30,6 +30,12 @@ automated test harnesses without depending on a host game's implementation.
   rules, timestamped naming, history pruning.
 - `ai_debug_bridge.gd` — autoload `AIDebugBridge`: file IPC loop, screenshot /
   piggyback / fetch orchestration, input injection.
+- `recording/` — deterministic Movie Maker recording orchestration:
+  - `record_session.gd` (`DebugBridgeRecordSession`) — activated by
+    `DebugBridgeTestRuntime` when `--gdbg-record-manifest` is passed; loads an
+    optional external director script, maintains offscreen `force_draw` rendering
+    and zero-drop tracking, and records `clip_begin` / `clip_end` / `mark`
+    boundaries.
 - `testing/` — game-agnostic testing surface:
   - `test_host.gd` (`DebugBridgeTestHostBase`) — host contract base class.
   - `test_runtime.gd` (`DebugBridgeTestRuntime`) — playtest orchestration autoload.
@@ -84,9 +90,9 @@ For a working project with console and test host adapters, see the
 [minimal example](https://github.com/Dluck-Games/godot-debug-bridge/blob/main/examples/minimal/README.md).
 
 Console and input IPC work with the CLI's default headless game launch.
-Screenshots and recordings need a rendered viewport, so launch with
-`gdbg run game --windowed`; headless capture requests return a readable error
-instead of touching Godot's dummy renderer.
+Screenshots require a rendered viewport (`gdbg run game --windowed`); headless
+capture requests return a readable error instead of touching Godot's dummy
+renderer. Deterministic video recording is launched through `gdbg record`.
 
 ## Testing surface
 

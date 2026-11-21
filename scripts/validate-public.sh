@@ -14,6 +14,7 @@ required=(
   addons/gdbg/ai_debug_bridge.gd
   addons/gdbg/console_bridge_host.gd
   addons/gdbg/console/console_registry.gd
+  addons/gdbg/recording/record_session.gd
   addons/gdbg/testing/test_host.gd
   addons/gdbg/testing/integration_runner.tscn
   cli/go.mod

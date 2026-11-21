@@ -9,12 +9,13 @@ project from an agent, shell, or CI job. The repository ships one product with
 two parts:
 
 - `addons/gdbg/` — the Godot runtime addon: versioned IPC, screenshots, input
-  injection, an extensible console-command framework, and integration/playtest
-  harnesses.
+  injection, deterministic Movie Maker recording orchestration, an extensible
+  console-command framework, and integration/playtest harnesses.
 - `gdbg` — the Go CLI: addon installation, project launch/stop, console and
-  debug commands, asset reimport, and unit/integration/playtest execution.
+  debug commands, zero-dependency deterministic video recording, asset reimport,
+  and unit/integration/playtest execution.
 
-Version 0.1.2 is the current patch release. The protocol and extension APIs are
+Version 0.2.0 is the current release. The protocol and extension APIs are
 usable but should still be treated as early-stage interfaces.
 
 ## Requirements
@@ -56,7 +57,7 @@ irm https://raw.githubusercontent.com/Dluck-Games/godot-debug-bridge/main/script
 ```
 
 Both installers download the latest GitHub Release artifact, verify its SHA-256
-checksum, and install to `~/.local/bin` by default. Set `GDBG_VERSION=0.1.2` to
+checksum, and install to `~/.local/bin` by default. Set `GDBG_VERSION=0.2.0` to
 pin a version or `GDBG_INSTALL_DIR` to select another destination.
 
 To build the current source instead:
@@ -108,15 +109,49 @@ gdbg --project-dir /path/to/game console help
 gdbg --project-dir /path/to/game debug input tap interact
 gdbg --project-dir /path/to/game stop game
 
-# Screenshot and recording need a rendered viewport.
+# Screenshots need a rendered viewport.
 gdbg --project-dir /path/to/game run game --windowed --detach
 # Add --mute to launch with the Dummy audio driver (no sound).
 gdbg --project-dir /path/to/game debug screenshot --width 1280
 ```
 
 The default launch is headless and supports console, script, input, and process
-control. Screenshot and recording commands require `run game --windowed`; a
-headless capture request fails immediately with an actionable error.
+control. Screenshot commands require `run game --windowed`; a headless capture
+request fails immediately with an actionable error.
+
+## Record deterministic gameplay videos
+
+`gdbg record` drives Godot Movie Maker (`--fixed-fps` + `--write-movie`) with
+zero external dependencies (no `ffmpeg`, Python, or third-party encoders),
+prevents macOS occlusion frame drops via offscreen `RenderingServer.force_draw`,
+trims and concatenates scripted clips, optionally generates a contact sheet and
+JSON manifest, and uses macOS built-in `avconvert` (`--codec auto`) to emit
+compact H.264/AAC MP4s (falling back to pure-Go faststart MJPEG+PCM on other
+platforms).
+
+```sh
+# Timed recording of the main scene
+gdbg --project-dir /path/to/game record --seconds 5 --fps 30 -o demo.mp4 -- --skip-menu
+
+# Director-driven multi-clip recording with contact sheet and manifest
+gdbg --project-dir /path/to/game record /path/to/director.gd \
+  --fps 60 --width 1280 --height 720 \
+  --output demo.mp4 \
+  --contact-sheet keyframes.jpg \
+  --manifest demo.manifest.json \
+  -- --skip-menu
+```
+
+External director scripts implement `func run(rec: DebugBridgeRecordSession) -> void`
+and run directly inside the production scene without modifying project files:
+
+- `rec.begin_clip(id, title)` / `rec.end_clip()` — mark kept clip intervals and verify zero dropped draws
+- `rec.mark(name)` — mark keyframe timestamps for the contact sheet and manifest
+- `rec.wait_frames(n)` — deterministic frame wait
+- `rec.tap_action(action, frames)` / `rec.hold_action(action, frames)` / `rec.press_key(keycode, frames)` — frame-accurate input
+- `rec.console(command)` — invoke project console commands
+- `rec.set_caption(text)` / `rec.clear_caption()` — native viewport caption overlay
+- `rec.finish(exit_code)` — flush timeline and quit cleanly
 
 The addon owns transport-level operations. Game-specific commands are supplied
 by the project through `DebugBridgeConsoleHostBase` command modules and are
@@ -172,7 +207,7 @@ where local processes are trusted.
 
 ```sh
 scripts/validate-public.sh
-scripts/package.sh 0.1.2-dev
+scripts/package.sh 0.2.0-dev
 ```
 
 CI runs Go tests and vet, a clean Godot addon/console smoke test, public-content
