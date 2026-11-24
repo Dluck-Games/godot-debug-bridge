@@ -17,6 +17,7 @@ const HEADLESS_SCREENSHOT_ERROR := "Screenshot capture requires a rendered displ
 const BRIDGE_HELP_TEXT := """
 
 Bridge commands:
+  perf                             Sample frame timings and Performance monitors
   input actions                    List injectable input actions
   input press <action>             Press and hold an input action
   input release <action>           Release an input action
@@ -28,6 +29,7 @@ Bridge commands:
 const HOST_NODE_PATH := "/root/DebugBridgeHost"
 const SCREENSHOT_NODE_PATH := "/root/ScreenshotManager"
 
+var _perf_sampler: Node
 var _poll_timer: float = 0.0
 var _command_in_progress: bool = false
 var _command_start_time: int = 0
@@ -133,10 +135,13 @@ func _execute_plain_command(content: String) -> void:
 
 
 func _write_result(content: String) -> void:
-	var out := FileAccess.open(DebugBridgeState.result_file(), FileAccess.WRITE)
+	var path := DebugBridgeState.result_file()
+	var temp := path + ".tmp"
+	var out := FileAccess.open(temp, FileAccess.WRITE)
 	if out:
 		out.store_string(content)
 		out.close()
+		DirAccess.rename_absolute(temp, path)
 
 
 func _write_json_result(data: Dictionary) -> void:
@@ -162,7 +167,13 @@ func _execute_command_json(cmd_dict: Dictionary) -> void:
 		return
 
 	# Bridge-level commands: screenshot (async) and fetch (capture lifecycle)
-	if cmd == "screenshot":
+	if cmd == "perf":
+		if _perf_sampler == null:
+			_perf_sampler = load("res://addons/gdbg/profiling/perf_sampler.gd").new()
+			add_child(_perf_sampler)
+		_write_json_result(_perf_sampler.command(_to_dictionary(cmd_dict.get("args", {}))))
+		return
+	elif cmd == "screenshot":
 		await _handle_screenshot_json(_to_dictionary(cmd_dict.get("args", {})))
 		return
 	elif cmd == "fetch":

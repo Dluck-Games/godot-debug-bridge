@@ -45,6 +45,9 @@ func stopRun(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Stopped game (PID %d)\n", pid)
 			stopped++
 		}
+		if err := waitProfiler(); err != nil {
+			return err
+		}
 	}
 
 	if target == "editor" || target == "all" {

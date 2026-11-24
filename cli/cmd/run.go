@@ -78,7 +78,9 @@ func init() {
 	runGameCmd.Flags().BoolVar(&flagMute, "mute", false, "launch with the Dummy audio driver so the game makes no sound")
 	runGameCmd.Flags().BoolVar(&flagForce, "force", false, "skip duplicate-process check, allow multiple instances")
 	runGameCmd.Flags().BoolVar(&flagDetach, "detach", false, "launch in background, log to file only, return immediately (for AI agents)")
-	runGameCmd.MarkFlagsMutuallyExclusive("windowed", "fullscreen")
+	runGameCmd.Flags().String("remote-profile", "", "collect Godot remote profiler data to a JSON file")
+	runGameCmd.Flags().Bool("headless", false, "launch without a window (default)")
+	runGameCmd.MarkFlagsMutuallyExclusive("headless", "windowed", "fullscreen")
 
 	runCmd.AddCommand(runGameCmd, runEditorCmd)
 	rootCmd.AddCommand(runCmd)
@@ -123,6 +125,12 @@ func runGame(cmd *cobra.Command, args []string) error {
 	if flagMute {
 		godotArgs = append(godotArgs, "--audio-driver", "Dummy")
 	}
+	out, _ := cmd.Flags().GetString("remote-profile")
+	profiler, err := startProfiler(out, flagDetach)
+	if err != nil {
+		return err
+	}
+	godotArgs = append(godotArgs, profiler.engineArgs...)
 	godotArgs = append(godotArgs, "--path", projectDir)
 
 	gameArgs := append([]string(nil), args...)
@@ -144,9 +152,13 @@ func runGame(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagDetach {
-		return runGameDetached(godotBin, godotArgs, projectDir, bridgeEnv)
+		err := runGameDetached(godotBin, gameArgs, profiler.engineArgs, projectDir, bridgeEnv)
+		if err != nil {
+			return profiler.finish(err)
+		}
+		return nil
 	}
-	return runGameAttached(godotBin, godotArgs, projectDir, bridgeEnv)
+	return profiler.finish(runGameAttached(godotBin, godotArgs, projectDir, bridgeEnv))
 }
 
 func logStateBase() string {
@@ -202,7 +214,7 @@ func runGameAttached(godotBin string, godotArgs []string, projectDir string, bri
 	}
 }
 
-func runGameDetached(godotBin string, godotArgs []string, projectDir string, bridgeEnv []string) error {
+func runGameDetached(godotBin string, gameArgs, engineArgs []string, projectDir string, bridgeEnv []string) error {
 	logDir := filepath.Join(logStateBase(), "game")
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return fmt.Errorf("cannot create log directory: %w", err)
@@ -215,6 +227,7 @@ func runGameDetached(godotBin string, godotArgs []string, projectDir string, bri
 		return fmt.Errorf("cannot create log file: %w", err)
 	}
 
+	defer logFile.Close()
 	displayMode := godot.DisplayHeadless
 	if flagWindowed {
 		displayMode = godot.DisplayWindowed
@@ -227,12 +240,12 @@ func runGameDetached(godotBin string, godotArgs []string, projectDir string, bri
 		DisplayMode: displayMode,
 		Mute:        flagMute,
 		Detach:      true,
-		ExtraArgs:   extractPassthroughArgs(godotArgs),
+		EngineArgs:  engineArgs,
+		ExtraArgs:   gameArgs,
 		LogFile:     logFile,
 		Env:         bridgeEnv,
 	})
 	if err != nil {
-		logFile.Close()
 		return fmt.Errorf("failed to launch Godot: %w", err)
 	}
 
@@ -251,15 +264,6 @@ func runGameDetached(godotBin string, godotArgs []string, projectDir string, bri
 	}
 	fmt.Printf("Log: %s\n", logPath)
 
-	return nil
-}
-
-func extractPassthroughArgs(godotArgs []string) []string {
-	for i, a := range godotArgs {
-		if a == "--" && i+1 < len(godotArgs) {
-			return godotArgs[i+1:]
-		}
-	}
 	return nil
 }
 

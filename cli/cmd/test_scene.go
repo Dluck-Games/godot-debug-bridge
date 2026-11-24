@@ -40,6 +40,7 @@ Examples:
 }
 
 func init() {
+	testSceneCmd.Flags().String("remote-profile", "", "collect Godot remote profiler data to a JSON file")
 	testCmd.AddCommand(testSceneCmd)
 }
 
@@ -67,14 +68,20 @@ func testSceneRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return runTestScene(godotBin, projectDir, sceneRes, userArgs, flagVerbose)
+	out, _ := cmd.Flags().GetString("remote-profile")
+	profiler, err := startProfiler(out, false)
+	if err != nil {
+		return err
+	}
+	return profiler.finish(runTestScene(godotBin, projectDir, sceneRes, userArgs, flagVerbose, profiler.engineArgs))
 }
 
 // runTestScene launches Godot with the scene, streaming stdio and injecting
 // GDBG_STATE. verbose enables Godot engine verbose logging. A nonzero Godot
 // exit is returned as an error so the CLI exits with a nonzero status.
-func runTestScene(godotBin, projectDir, sceneRes string, userArgs []string, verbose bool) error {
-	child := exec.Command(godotBin, buildSceneGodotArgs(sceneRes, userArgs, verbose)...)
+func runTestScene(godotBin, projectDir, sceneRes string, userArgs []string, verbose bool, engineArgs []string) error {
+	args := append(engineArgs, buildSceneGodotArgs(sceneRes, userArgs, verbose)...)
+	child := exec.Command(godotBin, args...)
 	child.Dir = projectDir
 	child.Stdin = os.Stdin
 	child.Stdout = os.Stdout

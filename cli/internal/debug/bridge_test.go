@@ -37,7 +37,12 @@ func respondAfterCommand(t *testing.T, ipcDir, content string) {
 		deadline := time.Now().Add(5 * time.Second)
 		for time.Now().Before(deadline) {
 			if _, err := os.Stat(cmdPath); err == nil {
-				_ = os.WriteFile(resPath, []byte(content), 0o644)
+				// Publish the complete reply the same way the addon does.
+				if err := os.WriteFile(resPath+".tmp", []byte(content), 0o644); err != nil {
+					t.Errorf("write simulated reply: %v", err)
+				} else if err := os.Rename(resPath+".tmp", resPath); err != nil {
+					t.Errorf("publish simulated reply: %v", err)
+				}
 				return
 			}
 			time.Sleep(5 * time.Millisecond)

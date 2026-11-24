@@ -94,6 +94,17 @@ Screenshots require a rendered viewport (`gdbg run game --windowed`); headless
 capture requests return a readable error instead of touching Godot's dummy
 renderer. Deterministic video recording is launched through `gdbg record`.
 
+## Performance sampling
+
+With the bridge running, `gdbg perf start` begins sampling frame times and
+performance monitors. `gdbg perf stop --out before.json` saves the summary.
+Use `gdbg perf capture --duration 2 --out after.json` for a timed sample and
+`gdbg perf diff before.json after.json` to compare the two. The sampler keeps
+up to 300,000 frames and sets `truncated` when it reaches that limit.
+
+For per-function and server timings, launch with `gdbg run game --detach
+--remote-profile <file.json>` and use `gdbg stop game` to finalize the report.
+
 ## Testing surface
 
 The addon owns a game-agnostic automated-testing framework. The host project

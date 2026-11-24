@@ -15,7 +15,7 @@ two parts:
   debug commands, zero-dependency deterministic video recording, asset reimport,
   and unit/integration/playtest execution.
 
-Version 0.2.0 is the current release. The protocol and extension APIs are
+The protocol and extension APIs in 0.3.0 are
 usable but should still be treated as early-stage interfaces.
 
 ## Requirements
@@ -57,7 +57,7 @@ irm https://raw.githubusercontent.com/Dluck-Games/godot-debug-bridge/main/script
 ```
 
 Both installers download the latest GitHub Release artifact, verify its SHA-256
-checksum, and install to `~/.local/bin` by default. Set `GDBG_VERSION=0.2.0` to
+checksum, and install to `~/.local/bin` by default. Set `GDBG_VERSION=0.3.0` to
 pin a version or `GDBG_INSTALL_DIR` to select another destination.
 
 To build the current source instead:
@@ -118,6 +118,24 @@ gdbg --project-dir /path/to/game debug screenshot --width 1280
 The default launch is headless and supports console, script, input, and process
 control. Screenshot commands require `run game --windowed`; a headless capture
 request fails immediately with an actionable error.
+
+## Profile performance
+
+Run these commands from the project directory. `--remote-profile <file.json>`
+collects per-function and server timings over loopback. `stop game` finalizes
+that report. While the game runs, use `perf start` and `perf stop` to sample a
+workload, or `perf capture` for a fixed interval. `perf diff` compares two
+sampler summaries.
+
+```sh
+gdbg run game --detach --remote-profile reports/remote.json
+gdbg perf start
+# Exercise the workload, then save its summary.
+gdbg perf stop --out reports/before.json
+gdbg perf capture --duration 2 --out reports/after.json
+gdbg perf diff reports/before.json reports/after.json
+gdbg stop game
+```
 
 ## Record deterministic gameplay videos
 
@@ -207,7 +225,7 @@ where local processes are trusted.
 
 ```sh
 scripts/validate-public.sh
-scripts/package.sh 0.2.0-dev
+scripts/package.sh 0.3.0-dev
 ```
 
 CI runs Go tests and vet, a clean Godot addon/console smoke test, public-content

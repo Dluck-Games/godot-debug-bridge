@@ -107,6 +107,7 @@ type LaunchOpts struct {
 	Mute        bool // pass --audio-driver Dummy so the game makes no sound
 	Editor      bool
 	Detach      bool
+	EngineArgs  []string // engine flags before --path and the user argument separator
 	ExtraArgs   []string
 	LogFile     *os.File
 	// Env holds KEY=VALUE pairs appended to the child's environment
@@ -130,6 +131,7 @@ func Launch(godotBin string, opts LaunchOpts) (*exec.Cmd, error) {
 	if opts.Editor {
 		args = append(args, "--editor")
 	}
+	args = append(args, opts.EngineArgs...)
 	args = append(args, "--path", opts.ProjectDir)
 	if len(opts.ExtraArgs) > 0 {
 		args = append(args, "--")
@@ -140,7 +142,7 @@ func Launch(godotBin string, opts LaunchOpts) (*exec.Cmd, error) {
 	cmd.Env = append(os.Environ(), opts.Env...)
 
 	if opts.Detach {
-		cmd.SysProcAttr = detachAttr()
+		DetachCommand(cmd)
 		if opts.LogFile != nil {
 			cmd.Stdout = opts.LogFile
 			cmd.Stderr = opts.LogFile
@@ -154,6 +156,10 @@ func Launch(godotBin string, opts LaunchOpts) (*exec.Cmd, error) {
 		return nil, fmt.Errorf("failed to launch Godot: %w", err)
 	}
 	return cmd, nil
+}
+
+func DetachCommand(cmd *exec.Cmd) {
+	cmd.SysProcAttr = detachAttr()
 }
 
 func StopByPIDFile(projectDir, pidFileName string) (int, error) {
